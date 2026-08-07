@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Coding Pilot · Staking</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --paper:#F6F3EC; --paper-dark:#EDE8DC; --ink:#1C2430; --ink-soft:#5B6472; --line:#D8D1BF;
+    --accent:#2F6F5E; --accent-soft:#DCE8E3; --flag:#B4452F; --flag-soft:#F3DED8;
+    --amber:#B9862B; --amber-soft:#F1E4CB; --indigo:#454E88; --indigo-soft:#E1E2F0;
+    --white:#FFFDF8; --radius:3px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--paper);color:var(--ink);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  .mono{font-family:'IBM Plex Mono','SFMono-Regular',Consolas,monospace;}
+  a{color:inherit;}
+  .wrap{max-width:980px;margin:0 auto;padding:32px 20px 80px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
+  .eyebrow a{color:var(--indigo);text-decoration:none;border-bottom:1px dotted var(--indigo);}
+  h1{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-weight:600;font-size:clamp(28px,4vw,40px);margin:0 0 10px;letter-spacing:-.01em;}
+  .lede{max-width:680px;color:var(--ink-soft);font-size:15px;margin-bottom:6px;}
+  .guarantee{display:inline-flex;align-items:center;gap:8px;margin-top:14px;padding:8px 14px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:var(--radius);font-size:13px;color:#1B4438;}
+  .guarantee .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none;}
+  section{margin-top:40px;}
+  .section-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:16px;flex-wrap:wrap;gap:8px;}
+  .section-title{font-family:'IBM Plex Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-soft);}
+  .dropzone{border:1.5px dashed var(--line);border-radius:var(--radius);background:var(--white);padding:40px 24px;text-align:center;cursor:pointer;transition:border-color .15s ease, background .15s ease;}
+  .dropzone.drag{border-color:var(--accent);background:var(--accent-soft);}
+  .dropzone strong{display:block;font-size:16px;margin-bottom:4px;}
+  .dropzone span{color:var(--ink-soft);font-size:13px;}
+  .dropzone input{display:none;}
+  details.panel{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);}
+  details.panel > summary{list-style:none;cursor:pointer;padding:14px 18px;font-size:13px;font-family:'IBM Plex Mono',monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--indigo);display:flex;align-items:center;gap:8px;}
+  details.panel > summary::-webkit-details-marker{display:none;}
+  details.panel > summary::before{content:'▸';transition:transform .15s;}
+  details.panel[open] > summary::before{transform:rotate(90deg);}
+  .panel-body{padding:0 18px 18px;}
+  .field-row{display:grid;grid-template-columns:180px 1fr;gap:12px;align-items:center;margin-bottom:10px;}
+  .field-row label{font-size:13px;color:var(--ink-soft);}
+  .field-row input, .field-row textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius);font-family:'IBM Plex Mono',monospace;font-size:13px;background:var(--paper);color:var(--ink);}
+  .field-row textarea{min-height:64px;resize:vertical;}
+  .field-row input:focus, .field-row textarea:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .panel-note{font-size:12px;color:var(--ink-soft);margin:10px 0 14px;}
+  .panel-note code{background:var(--paper-dark);padding:1px 5px;border-radius:2px;}
+  .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+  button{font-family:'Inter',sans-serif;font-size:13px;font-weight:600;padding:9px 16px;border-radius:var(--radius);border:1px solid var(--ink);background:var(--ink);color:var(--white);cursor:pointer;transition:transform .08s ease, opacity .15s ease;}
+  button:hover{opacity:.88;}
+  button:active{transform:translateY(1px);}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
+  button.secondary{background:var(--white);color:var(--ink);border-color:var(--line);}
+  button.accent{background:var(--accent);border-color:var(--accent);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  .empty-state{padding:32px;text-align:center;color:var(--ink-soft);border:1px dashed var(--line);border-radius:var(--radius);background:var(--white);font-size:14px;}
+  .stub{background:var(--white);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:18px;overflow:hidden;}
+  .stub-perf{height:6px;background:repeating-linear-gradient(90deg, var(--line) 0 6px, transparent 6px 13px);}
+  .stub-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--line);}
+  .stub-head-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .badge{font-family:'IBM Plex Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:4px 9px;border-radius:12px;border:1px solid transparent;background:#E4EDE9;color:#2F6F5E;border-color:var(--accent);}
+  .badge.warn{background:var(--flag-soft);color:#7C2B1A;border-color:var(--flag);}
+  .filename{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--ink-soft);}
+  .warn-text{font-size:12px;color:var(--flag);font-family:'IBM Plex Mono',monospace;}
+  .stub-body{padding:16px 18px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;}
+  .cell label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-soft);margin-bottom:4px;}
+  .cell input, .cell select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:var(--radius);font-family:'IBM Plex Mono',monospace;font-size:12.5px;background:var(--paper);color:var(--ink);}
+  .cell input:focus, .cell select:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  .calc-panel{margin-top:16px;background:var(--paper-dark);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;}
+  .calc-row{display:flex;justify-content:space-between;padding:5px 0;font-size:13px;border-bottom:1px dashed var(--line);}
+  .calc-row:last-child{border-bottom:none;}
+  .calc-row .k{color:var(--ink-soft);}
+  .calc-row .v{font-family:'IBM Plex Mono',monospace;}
+  .calc-row.result .v{font-weight:700;font-size:14px;}
+  .calc-row.result{border-top:1px solid var(--ink);margin-top:6px;padding-top:8px;}
+  .stub-foot{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 18px;background:var(--paper-dark);border-top:1px solid var(--line);}
+  .status{font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--ink-soft);}
+  .status.ok{color:var(--accent);}
+  .status.err{color:var(--flag);}
+  footer.bulk{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-top:24px;padding-top:20px;border-top:1px solid var(--line);}
+  .count{font-size:13px;color:var(--ink-soft);}
+  @media(max-width:700px){ .field-row{grid-template-columns:1fr;} .stub-foot{flex-direction:column;align-items:stretch;} }
+  @media (prefers-reduced-motion: reduce){*{transition:none !important;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Coding Pilot · Subpage <a href="index.html">← zurück zur Übersicht</a></div>
+  <h1>Staking</h1>
+  <p class="lede">Staking-Belege (ETH/SOL) hochladen, Netto-Gutschrift und Transaktionsdaten auslesen, Kurse aus Turso beziehen und AmtLC/AmtCHF berechnen.</p>
+  <div class="guarantee"><span class="dot"></span> Die PDF-Datei selbst verlässt den Browser nie.</div>
+
+  <section>
+    <div class="section-head"><span class="section-title">01 — Staking-Belege hochladen</span></div>
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="PDF-Dateien auswählen oder hierher ziehen">
+      <strong>PDFs hierher ziehen oder klicken zum Auswählen</strong>
+      <span>Erwartet: Swissquote-Belohnung/Staking-Belege für ETH oder SOL</span>
+      <input type="file" id="fileInput" accept="application/pdf" multiple>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><span class="section-title">02 — Turso-Preisquelle</span></div>
+    <details class="panel" id="tursoPanel">
+      <summary>Verbindung &amp; Security-IDs konfigurieren</summary>
+      <div class="panel-body">
+        <div class="field-row"><label for="tursoUrl">Datenbank-URL</label>
+          <input type="text" id="tursoUrl" class="mono" placeholder="https://dein-db-name-org.turso.io"></div>
+        <div class="field-row"><label for="tursoToken">Auth-Token</label>
+          <input type="password" id="tursoToken" class="mono" placeholder="eyJhbGciOi..."></div>
+        <div class="field-row"><label for="idEth">SecurityID ETH</label>
+          <input type="text" id="idEth" class="mono" value="40149561"></div>
+        <div class="field-row"><label for="idSol">SecurityID SOL</label>
+          <input type="text" id="idSol" class="mono" value="22000"></div>
+        <div class="field-row"><label for="idFx">SecurityID USD/CHF</label>
+          <input type="text" id="idFx" class="mono" value="275000"></div>
+        <div class="field-row"><label for="sqlTemplate">SQL-Vorlage (Preisabfrage)</label>
+          <textarea id="sqlTemplate" class="mono">SELECT Price, PriceDate FROM security_prices WHERE SecurityID = {securityId} AND PriceDate &lt;= '{date}' ORDER BY PriceDate DESC LIMIT 1</textarea></div>
+        <p class="panel-note">Platzhalter <code>{securityId}</code> und <code>{date}</code> werden ersetzt. Die Vorlage nimmt den letzten verfügbaren Preis <em>am oder vor</em> dem Transaktionsdatum (überbrückt Handelspausen/Wochenenden). Spaltennamen (<code>Price</code>, <code>PriceDate</code>) bitte an dein tatsächliches Schema anpassen — falls sie nicht passen, wird trotzdem versucht, die erste numerische Spalte als Preis und die erste Text-/Datumsspalte als Preisdatum zu interpretieren.</p>
+        <div class="field-row" style="grid-template-columns:auto 1fr;">
+          <input type="checkbox" id="tursoRemember" style="width:auto;">
+          <label for="tursoRemember" style="cursor:pointer;">Zugangsdaten in diesem Browser merken (localStorage)</label>
+        </div>
+        <p class="panel-note"><strong>Wirkt nur außerhalb der Claude.ai-Vorschau</strong> — z.B. sobald diese Seite auf GitHub Pages läuft.</p>
+        <div class="btn-row">
+          <button class="secondary" id="testConn">Verbindung testen</button>
+          <button class="secondary" id="clearSaved">Gespeicherte Zugangsdaten löschen</button>
+        </div>
+        <p class="status" id="tursoStatus"></p>
+      </div>
+    </details>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="section-title">03 — Belege &amp; Berechnung</span>
+      <span class="count" id="resultCount"></span>
+    </div>
+    <div id="results"><div class="empty-state" id="emptyState">Noch keine Belege hochgeladen.</div></div>
+  </section>
+
+  <footer class="bulk" id="bulkFooter" style="display:none;">
+    <span class="count" id="bulkCount"></span>
+    <div class="btn-row">
+      <button class="accent" id="calcAll">Alle Preise abrufen &amp; berechnen</button>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/* ================= State ================= */
+let docs = []; // {id, name, arrayBuffer, text, asset, datum, quantity, referenz, hinweis, calc, status}
+let seq = 0;
+const KNOWN_ASSETS = ['ETH','SOL'];
+
+/* ================= Helpers ================= */
+function grab(re, t, idx){ idx = idx || 1; const m = t.match(re); return m ? m[idx].trim() : ''; }
+function toISO(d){ if(!d) return ''; const m = d.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/); if(!m) return ''; return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+function roundTo2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+/* ================= PDF text extraction ================= */
+async function extractPdfText(arrayBuffer){
+  const pdf = await pdfjsLib.getDocument({data: arrayBuffer.slice(0)}).promise;
+  let lines = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    let lastY=null, line=[];
+    for(const item of content.items){
+      const y = item.transform[5];
+      if(lastY!==null && Math.abs(y-lastY)>2){ lines.push(line.join(' ')); line=[]; }
+      line.push(item.str); lastY=y;
+    }
+    if(line.length) lines.push(line.join(' '));
+  }
+  return lines.join('\n');
+}
+
+/* ================= Staking receipt parser ================= */
+function parseStaking(t){
+  const out = {asset:'', datum:'', quantity:'', referenz:'', hinweis:''};
+  out.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t) || grab(/Our reference\s*:\s*(\d+)/i, t);
+  out.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  const qm = t.match(/Anzahl\s+Währung\s+([\d.,']+)\s+([A-Z]{2,5})/i);
+  if(qm){ out.quantity = qm[1]; out.asset = qm[2].toUpperCase(); }
+  if(!out.quantity){
+    // fallback: Total <CCY> <amount> line (net credited amount for Belohnung-style receipts)
+    const tm = t.match(/Total\s+([A-Z]{2,5})\s+([\d.,']+)/i);
+    if(tm){ out.asset = out.asset || tm[1].toUpperCase(); out.quantity = tm[2]; }
+  }
+  if(!out.asset || !KNOWN_ASSETS.includes(out.asset)){
+    out.hinweis = out.asset ? ('Asset "'+out.asset+'" ist nicht ETH/SOL — bitte prüfen') : 'Asset konnte nicht erkannt werden — bitte prüfen';
+  }
+  if(!out.datum || !out.quantity || !out.referenz){
+    out.hinweis = (out.hinweis ? out.hinweis + ' · ' : '') + 'Nicht alle Pflichtfelder gefunden — bitte ergänzen';
+  }
+  return out;
+}
+
+/* ================= Rendering ================= */
+function renderAll(){
+  const container = document.getElementById('results');
+  const empty = document.getElementById('emptyState');
+  container.innerHTML = '';
+  if(docs.length === 0){
+    container.appendChild(empty);
+    document.getElementById('resultCount').textContent = '';
+    document.getElementById('bulkFooter').style.display = 'none';
+    return;
+  }
+  document.getElementById('resultCount').textContent = docs.length + ' Beleg(e)';
+  document.getElementById('bulkFooter').style.display = 'flex';
+  document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet';
+
+  docs.forEach(doc => {
+    const stub = document.createElement('div');
+    stub.className = 'stub';
+    stub.innerHTML = `
+      <div class="stub-perf"></div>
+      <div class="stub-head">
+        <div class="stub-head-left">
+          <span class="badge ${KNOWN_ASSETS.includes(doc.asset) ? '' : 'warn'}">${doc.asset || 'Unbekannt'} · Staking</span>
+          <span class="filename">${doc.name}</span>
+        </div>
+        ${doc.hinweis ? '<span class="warn-text">⚠ ' + doc.hinweis + '</span>' : ''}
+      </div>
+      <div class="stub-body">
+        <div class="grid">
+          <div class="cell"><label>Crypto Asset</label>
+            <select data-role="asset">
+              <option value="ETH" ${doc.asset==='ETH'?'selected':''}>ETH</option>
+              <option value="SOL" ${doc.asset==='SOL'?'selected':''}>SOL</option>
+            </select>
+          </div>
+          <div class="cell"><label>Transaktionsdatum</label><input type="date" data-role="datum" value="${doc.datum||''}"></div>
+          <div class="cell"><label>Quantity (Netto Gutschrift)</label><input type="text" data-role="quantity" value="${doc.quantity||''}"></div>
+          <div class="cell"><label>Transaktionsnummer</label><input type="text" data-role="referenz" value="${doc.referenz||''}"></div>
+        </div>
+        <div class="calc-panel" data-role="calcpanel" style="${doc.calc ? '' : 'display:none;'}"></div>
+      </div>
+      <div class="stub-foot">
+        <span class="status" data-role="status">${doc.status||''}</span>
+        <div class="btn-row">
+          <button class="accent" data-role="calc">Preise abrufen &amp; berechnen</button>
+        </div>
+      </div>
+    `;
+    stub.querySelector('[data-role="asset"]').addEventListener('change', e => doc.asset = e.target.value);
+    stub.querySelector('[data-role="datum"]').addEventListener('input', e => doc.datum = e.target.value);
+    stub.querySelector('[data-role="quantity"]').addEventListener('input', e => doc.quantity = e.target.value);
+    stub.querySelector('[data-role="referenz"]').addEventListener('input', e => doc.referenz = e.target.value);
+    stub.querySelector('[data-role="calc"]').addEventListener('click', ()=> calcOne(doc, stub));
+    renderCalcPanel(doc, stub);
+    container.appendChild(stub);
+  });
+}
+function renderCalcPanel(doc, stub){
+  const panel = stub.querySelector('[data-role="calcpanel"]');
+  if(!doc.calc){ panel.style.display='none'; panel.innerHTML=''; return; }
+  const c = doc.calc;
+  panel.style.display = '';
+  panel.innerHTML = `
+    <div class="calc-row"><span class="k">${doc.asset}/USD am ${c.cryptoPriceDate||doc.datum}</span><span class="v">${c.cryptoPrice}</span></div>
+    <div class="calc-row"><span class="k">USD/CHF am ${c.fxPriceDate||doc.datum}</span><span class="v">${c.fxPrice}</span></div>
+    <div class="calc-row result"><span class="k">AmtLC = Quantity × ${doc.asset}-Preis</span><span class="v">${c.AmtLC} USD</span></div>
+    <div class="calc-row result"><span class="k">AmtCHF = AmtLC × USD/CHF</span><span class="v">${c.AmtCHF} CHF</span></div>
+  `;
+}
+
+/* ================= File ingestion ================= */
+async function handleFiles(fileList){
+  for(const file of fileList){
+    if(file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) continue;
+    const id = ++seq;
+    const buf = await file.arrayBuffer();
+    let text = '', parsed = {asset:'',datum:'',quantity:'',referenz:'',hinweis:'PDF konnte nicht gelesen werden'};
+    try{ text = await extractPdfText(buf); parsed = parseStaking(text); } catch(e){}
+    docs.push({id, name:file.name, arrayBuffer:buf, text,
+      asset:parsed.asset, datum:parsed.datum, quantity:parsed.quantity, referenz:parsed.referenz,
+      hinweis:parsed.hinweis, calc:null, status:''});
+  }
+  renderAll();
+}
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+dropzone.addEventListener('click', ()=> fileInput.click());
+dropzone.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' ') fileInput.click(); });
+fileInput.addEventListener('change', (e)=> handleFiles(e.target.files));
+['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', (e)=> handleFiles(e.dataTransfer.files));
+
+/* ================= Turso price collector ================= */
+function detectLocalStorage(){
+  try{ const k='__probe__'; window.localStorage.setItem(k,'1'); window.localStorage.removeItem(k); return window.localStorage; }
+  catch(e){ return null; }
+}
+const LS = detectLocalStorage();
+const LS_KEY = 'codingpilot_staking_turso_v1';
+function loadSavedConfig(){ if(!LS) return null; try{ const raw=LS.getItem(LS_KEY); return raw?JSON.parse(raw):null; }catch(e){ return null; } }
+function persistConfigIfEnabled(){
+  const remember = document.getElementById('tursoRemember').checked;
+  if(!remember || !LS) return;
+  try{ LS.setItem(LS_KEY, JSON.stringify(tursoConfig())); } catch(e){}
+}
+function clearSavedConfig(){ if(LS){ try{ LS.removeItem(LS_KEY); }catch(e){} } }
+(function init(){
+  const saved = loadSavedConfig();
+  if(saved){
+    document.getElementById('tursoUrl').value = saved.url || '';
+    document.getElementById('tursoToken').value = saved.token || '';
+    document.getElementById('idEth').value = saved.idEth || '40149561';
+    document.getElementById('idSol').value = saved.idSol || '22000';
+    document.getElementById('idFx').value = saved.idFx || '275000';
+    if(saved.sqlTemplate) document.getElementById('sqlTemplate').value = saved.sqlTemplate;
+    document.getElementById('tursoRemember').checked = true;
+  }
+  if(!LS) document.getElementById('tursoRemember').disabled = true;
+  ['tursoUrl','tursoToken','idEth','idSol','idFx','sqlTemplate'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', persistConfigIfEnabled);
+  });
+  document.getElementById('tursoRemember').addEventListener('change', (e)=>{
+    if(e.target.checked) persistConfigIfEnabled(); else clearSavedConfig();
+  });
+  document.getElementById('clearSaved').addEventListener('click', ()=>{
+    clearSavedConfig();
+    document.getElementById('tursoRemember').checked = false;
+    const el = document.getElementById('tursoStatus');
+    el.className='status'; el.textContent='Gespeicherte Zugangsdaten gelöscht.';
+  });
+})();
+
+function tursoConfig(){
+  return {
+    url: document.getElementById('tursoUrl').value.trim().replace(/\/$/,''),
+    token: document.getElementById('tursoToken').value.trim(),
+    idEth: document.getElementById('idEth').value.trim(),
+    idSol: document.getElementById('idSol').value.trim(),
+    idFx: document.getElementById('idFx').value.trim(),
+    sqlTemplate: document.getElementById('sqlTemplate').value
+  };
+}
+async function tursoExecute(sql){
+  const cfg = tursoConfig();
+  if(!cfg.url || !cfg.token) throw new Error('Turso-URL und Token erforderlich');
+  const res = await fetch(cfg.url + '/v2/pipeline', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.token},
+    body: JSON.stringify({requests:[{type:'execute', stmt:{sql}}, {type:'close'}]})
+  });
+  const text = await res.text();
+  if(!res.ok) throw new Error('HTTP '+res.status+': '+text.slice(0,300));
+  let json;
+  try{ json = JSON.parse(text); } catch(e){ throw new Error('Unerwartete Antwort: '+text.slice(0,300)); }
+  const execResult = json.results && json.results[0];
+  if(!execResult) throw new Error('Keine Antwort erhalten');
+  if(execResult.type === 'error') throw new Error((execResult.error && execResult.error.message) || 'Turso-Fehler');
+  const result = execResult.response && execResult.response.result;
+  if(!result || !result.rows) return [];
+  const cols = (result.cols||[]).map(c=>c.name);
+  return result.rows.map(row => {
+    const obj = {};
+    row.forEach((cell,i) => {
+      let v = cell ? cell.value : null;
+      if(cell && (cell.type==='float' || cell.type==='integer') && v!==null) v = Number(v);
+      obj[cols[i] || ('col'+i)] = v;
+    });
+    return obj;
+  });
+}
+function extractPriceRow(row){
+  let price=null, date=null;
+  for(const [k,v] of Object.entries(row)){
+    if(price===null && typeof v==='number') price=v;
+    else if(date===null && typeof v==='string') date=v;
+  }
+  return {price, date};
+}
+async function fetchPrice(securityId, dateISO){
+  const cfg = tursoConfig();
+  const sql = cfg.sqlTemplate.split('{securityId}').join(securityId).split('{date}').join(dateISO);
+  const rows = await tursoExecute(sql);
+  if(rows.length === 0) return null;
+  return extractPriceRow(rows[0]);
+}
+
+document.getElementById('testConn').addEventListener('click', async ()=>{
+  const el = document.getElementById('tursoStatus');
+  el.className='status'; el.textContent='Prüfe Verbindung…';
+  try{ await tursoExecute('SELECT 1'); el.className='status ok'; el.textContent='✓ Verbindung erfolgreich'; }
+  catch(e){ el.className='status err'; el.textContent='✗ '+e.message; }
+});
+
+async function calcOne(doc, stubEl){
+  const statusEl = stubEl.querySelector('[data-role="status"]');
+  const cfg = tursoConfig();
+  if(!KNOWN_ASSETS.includes(doc.asset)){ statusEl.className='status err'; statusEl.textContent='✗ Asset muss ETH oder SOL sein'; return; }
+  if(!doc.datum){ statusEl.className='status err'; statusEl.textContent='✗ Transaktionsdatum fehlt'; return; }
+  const qty = parseFloat(String(doc.quantity).replace(/'/g,'').replace(',','.'));
+  if(isNaN(qty)){ statusEl.className='status err'; statusEl.textContent='✗ Quantity ist keine gültige Zahl'; return; }
+  statusEl.className='status'; statusEl.textContent='Rufe Preise von Turso ab…';
+  try{
+    const assetId = doc.asset === 'ETH' ? cfg.idEth : cfg.idSol;
+    const cryptoRow = await fetchPrice(assetId, doc.datum);
+    if(!cryptoRow || cryptoRow.price===null) throw new Error(doc.asset+'-Preis für '+doc.datum+' nicht gefunden');
+    const fxRow = await fetchPrice(cfg.idFx, doc.datum);
+    if(!fxRow || fxRow.price===null) throw new Error('USD/CHF-Kurs für '+doc.datum+' nicht gefunden');
+    const amtLC = roundTo2(qty * cryptoRow.price);
+    const amtCHF = roundTo2(amtLC * fxRow.price);
+    doc.calc = {
+      cryptoPrice: cryptoRow.price, cryptoPriceDate: cryptoRow.date,
+      fxPrice: fxRow.price, fxPriceDate: fxRow.date,
+      AmtLC: amtLC.toFixed(2), AmtCHF: amtCHF.toFixed(2)
+    };
+    statusEl.className='status ok'; statusEl.textContent='✓ Berechnet · '+new Date().toLocaleTimeString('de-CH');
+    renderCalcPanel(doc, stubEl);
+    document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet';
+  } catch(e){
+    statusEl.className='status err'; statusEl.textContent='✗ '+e.message;
+  }
+}
+document.getElementById('calcAll').addEventListener('click', async ()=>{
+  for(const doc of docs){
+    const stubEl = [...document.querySelectorAll('.stub')].find(el => el.querySelector('.filename').textContent === doc.name);
+    if(stubEl) await calcOne(doc, stubEl);
+  }
+});
+</script>
+</body>
+</html>
