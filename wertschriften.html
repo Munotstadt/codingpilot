@@ -595,12 +595,19 @@ function renderAll(){
     });
 
     // Owner / custody
+    function refreshFibuIfCalculated(){
+      if(doc.calc){
+        doc.fibu = resolveFibuAccounts(doc);
+        refreshFibuFields(doc, stub);
+      }
+    }
     stub.querySelector('[data-role="owner"]').addEventListener('change', e=>{
       doc.owner = e.target.value;
       const m = findRule('CustodyID', {broker: f.broker, owner: doc.owner});
       if(m){ doc.custodyId = m.Value; stub.querySelector('[data-role="custodyId"]').value = m.Value; }
+      refreshFibuIfCalculated();
     });
-    stub.querySelector('[data-role="custodyId"]').addEventListener('input', e=> doc.custodyId = e.target.value);
+    stub.querySelector('[data-role="custodyId"]').addEventListener('input', e=>{ doc.custodyId = e.target.value; refreshFibuIfCalculated(); });
     stub.querySelector('[data-role="learnCustody"]').addEventListener('click', async ()=>{
       const statusEl = stub.querySelector('[data-role="custodyStatus"]');
       if(!doc.owner || !doc.custodyId){ statusEl.className='status err'; statusEl.textContent='Owner+CustodyID nötig'; return; }
@@ -614,7 +621,7 @@ function renderAll(){
     // Security fields
     stub.querySelector('[data-role="securityId"]').addEventListener('input', e=> doc.securityId = e.target.value);
     stub.querySelector('[data-role="securityName"]').addEventListener('input', e=> doc.securityName = e.target.value);
-    stub.querySelector('[data-role="securityCurrency"]').addEventListener('input', e=> doc.securityCurrency = e.target.value);
+    stub.querySelector('[data-role="securityCurrency"]').addEventListener('input', e=>{ doc.securityCurrency = e.target.value; refreshFibuIfCalculated(); });
     stub.querySelector('[data-role="projectId"]').addEventListener('input', e=> doc.projectId = e.target.value);
     stub.querySelector('[data-role="entryNo"]').addEventListener('input', e=> doc.entryNo = e.target.value);
     stub.querySelector('[data-role="learnProject"]').addEventListener('click', async ()=>{
@@ -872,20 +879,31 @@ async function fetchFileAtPath(path){
 }
 const RULES_PATH = 'Data/codingpilot_rules.csv';
 const RULES_COLUMNS = ['RuleType','Broker','AccountOwner','Currency','SecurityID','Value'];
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 async function commitRule(type, criteria, value){
-  const existing = await fetchFileAtPath(RULES_PATH);
-  let rows = existing.exists ? parseCsvText(existing.content) : [];
-  const newRow = {RuleType:type, Broker:'', AccountOwner:'', Currency:'', SecurityID:'', Value:value};
-  Object.keys(criteria).forEach(k => { newRow[RULE_COL_MAP[k]] = criteria[k]; });
-  const idx = rows.findIndex(r => r.RuleType===type && Object.keys(criteria).every(k => String(r[RULE_COL_MAP[k]]||'')===String(criteria[k]||'')));
-  if(idx >= 0) rows[idx] = newRow; else rows.push(newRow);
-  const content = RULES_COLUMNS.join(',') + '\r\n' + rows.map(r => RULES_COLUMNS.map(c=>csvEscape(r[c]||'')).join(',')).join('\r\n') + '\r\n';
-  const body = { message: 'Regel gelernt: ' + type + ' ' + JSON.stringify(criteria) + ' = ' + value, content: b64EncodeUtf8(content), branch: ghConfig().branch };
-  if(existing.exists) body.sha = existing.sha;
-  const res = await ghApi('/contents/' + encodeURI(RULES_PATH), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  if(!res.ok) throw new Error('HTTP ' + res.status + ' beim Speichern: ' + (await res.text()).slice(0,200));
-  rules = rows; // update in-memory cache so subsequent docs in this session benefit immediately
-  return res.json();
+  const maxAttempts = 3;
+  for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    const existing = await fetchFileAtPath(RULES_PATH);
+    let rows = existing.exists ? parseCsvText(existing.content) : [];
+    const newRow = {RuleType:type, Broker:'', AccountOwner:'', Currency:'', SecurityID:'', Value:value};
+    Object.keys(criteria).forEach(k => { newRow[RULE_COL_MAP[k]] = criteria[k]; });
+    const idx = rows.findIndex(r => r.RuleType===type && Object.keys(criteria).every(k => String(r[RULE_COL_MAP[k]]||'')===String(criteria[k]||'')));
+    if(idx >= 0) rows[idx] = newRow; else rows.push(newRow);
+    const content = RULES_COLUMNS.join(',') + '\r\n' + rows.map(r => RULES_COLUMNS.map(c=>csvEscape(r[c]||'')).join(',')).join('\r\n') + '\r\n';
+    const body = { message: 'Regel gelernt: ' + type + ' ' + JSON.stringify(criteria) + ' = ' + value, content: b64EncodeUtf8(content), branch: ghConfig().branch };
+    if(existing.exists) body.sha = existing.sha;
+    const res = await ghApi('/contents/' + encodeURI(RULES_PATH), {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if(res.ok){
+      rules = rows; // update in-memory cache so subsequent docs in this session benefit immediately
+      return res.json();
+    }
+    const isConflict = res.status === 409;
+    const errText = await res.text();
+    if(!isConflict || attempt === maxAttempts){
+      throw new Error('HTTP ' + res.status + ' beim Speichern: ' + errText.slice(0,200));
+    }
+    await sleep(300 * attempt); // kurzer, wachsender Backoff, dann mit frischer sha erneut versuchen
+  }
 }
 document.getElementById('testConn').addEventListener('click', async ()=>{
   const el = document.getElementById('githubStatus');
