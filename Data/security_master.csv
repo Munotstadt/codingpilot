@@ -32,8 +32,6 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 38,Sika Ltd,,,
 39,Alcon AG,,,CHF
 40,Helvetia Baloise Holding AG,,,
-41,Raiffeisen Futura II - Systematic Invest Equity B (Samantha),,,
-42,Raiffeisen Futura II - Systematic Invest Equity (Vorsorge),,,
 43,Rendite Bundesobligationen Eidgenossenschaft 10 Jahre (%),,,
 44,Raiffeisen Winterthur Hypothek 1 Jahr Zinssatz,,,
 45,Raiffeisen Winterthur Hypothek 5 Jahr Zinssatz,,,
@@ -64,3 +62,5 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 10602719,UBS Gold ETF (AUUSI),10602719,CH0106027193,USD
 18789194,BTC - Bitcoin,,,USD
 40149561,ETH - Ethereum,,,USD
+114426952,Raiffeisen Futura II - Systematic Invest Equity B (Samantha),,,
+114426954,Raiffeisen Futura II - Systematic Invest Equity (Vorsorge),114426954,CH1144269540,
