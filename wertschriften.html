@@ -948,9 +948,9 @@ function buildFibuRows(doc){
   ];
   if(!sameDate){
     rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(-c.AmtLC_expenses), Valuta: valutaTrx, DateClearance: valutaValuta}));
-    rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(c.AmtLC_expenses), Valuta: valutaTrx, DateClearance: valutaValuta}));
+    rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(c.AmtLC_expenses), Valuta: valutaValuta, DateClearance: valutaValuta}));
   }
-  rows.push(Object.assign({}, base, {MainID: doc.fibu.bankAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: bankCry, AmtCry: fmt2(-c.AmtLC_expenses), Valuta: sameDate ? valutaTrx : valutaValuta, DateClearance:''}));
+  rows.push(Object.assign({}, base, {MainID: doc.fibu.bankAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: bankCry, AmtCry: bankCry ? fmt2(-c.AmtLC_expenses) : '', Valuta: sameDate ? valutaTrx : valutaValuta, DateClearance:''}));
   return rows;
 }
 document.getElementById('downloadFibu').addEventListener('click', ()=>{
