@@ -1,10 +1,11 @@
-RuleType,Broker,AccountOwner,Currency,SecurityID,Value
-CustodyID,Swissquote,Philipp,,,SQ PG
-ProjectID,,,,10602719,INV_UBS ETF (CH) - Gold 2023 ff.
-ProjectID,,,,114426954,INV_Vorsorgeinvestments PG
-ProjectID,,,,22000,INV_Solana_2025 ff.
-FIBUKonto,Raiffeisen,Vero,CHF,,TEST2
-CustodyID,Raiffeisen,Philipp,,,RB 3a PG
-FIBUKonto,Raiffeisen,Philipp,CHF,,RB Säule 3a PG
-EntryNo,,,,114426954,Raiffeisen Futura II - Systematic Invest Equity (Vorsorge PG)
-EntryNo,,,,22000,SOL - Solana - Transactions
+RuleType,Broker,AccountOwner,Currency,SecurityID,CustodyID,Value
+CustodyID,Swissquote,Philipp,,,,SQ PG
+ProjectID,,,,10602719,,INV_UBS ETF (CH) - Gold 2023 ff.
+ProjectID,,,,114426954,,INV_Vorsorgeinvestments PG
+ProjectID,,,,22000,,INV_Solana_2025 ff.
+FIBUKonto,Raiffeisen,Vero,CHF,,,TEST2
+CustodyID,Raiffeisen,Philipp,,,,RB 3a PG
+FIBUKonto,Raiffeisen,Philipp,CHF,,,RB Säule 3a PG
+EntryNo,,,,114426954,,Raiffeisen Futura II - Systematic Invest Equity (Vorsorge PG)
+EntryNo,,,,22000,,SOL - Solana - Transactions
+FIBU_Depot,,,,,SQ PG,SQ PG
