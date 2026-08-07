@@ -179,8 +179,13 @@
   <footer class="bulk" id="bulkFooter" style="display:none;">
     <span class="count" id="bulkCount"></span>
     <div class="btn-row">
+      <button class="secondary" id="downloadFibu">FIBUentries (XLSX) herunterladen</button>
       <button class="secondary" id="downloadWs">WSentries (XLSX) herunterladen</button>
     </div>
+  </footer>
+
+  <footer style="margin-top:32px;padding-top:16px;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">
+    <span id="appVersion"></span>
   </footer>
 
 </div>
@@ -189,6 +194,11 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 /* ================= State ================= */
+/* ================= Versioning =================
+   Manuell hochgezählt bei jeder Anpassung an einem neuen Tag. Heute: V1. */
+const APP_VERSION = 'V1 - 07.08.2026';
+document.getElementById('appVersion').textContent = APP_VERSION;
+
 let docs = [];
 let seq = 0;
 let securityMaster = [];   // [{SecurityID, SecurityName, ID_Valor, ID_ISIN, Currency}]
@@ -420,6 +430,38 @@ function idConfig(){
     idEurChf: document.getElementById('idEurChf').value.trim()
   };
 }
+
+/* ================= FIBU account resolution =================
+   Costs/Depot/Transfer sind formelbasiert (Muster aus den gelieferten Beispielen).
+   Das Bankkonto hat einen nicht ableitbaren Zusatz (z.B. "(#315)") und kommt daher
+   aus gelernten Regeln (RuleType='FIBUKonto'), mit den 6 bekannten Swissquote-Konten
+   als eingebauter Startbelegung — jederzeit per "Merken" überschreibbar. */
+function personSuffix(custody){ return (custody||'').trim().split(/\s+/).pop() || ''; }
+const FIBU_BANK_DEFAULTS = {
+  'Swissquote|Philipp|CHF': 'SQ WS CHF PG (#315)',
+  'Swissquote|Philipp|EUR': 'SQ WS EUR PG (#315)',
+  'Swissquote|Philipp|USD': 'SQ WS USD PG (#315)',
+  'Swissquote|Vero|CHF': 'SQ WS CHF VP',
+  'Swissquote|Vero|EUR': 'SQ WS EUR VP',
+  'Swissquote|Vero|USD': 'SQ WS USD VP'
+};
+function resolveBankAccount(broker, owner, currency){
+  const rule = findRule('FIBUKonto', {broker, owner, currency});
+  if(rule) return rule.Value;
+  return FIBU_BANK_DEFAULTS[broker+'|'+owner+'|'+currency] || '';
+}
+function resolveFibuAccounts(doc){
+  const f = doc.fields;
+  const suffix = personSuffix(doc.custodyId);
+  const brokerAbbr = f.broker==='Swissquote' ? 'SQ' : (f.broker==='Raiffeisen' ? 'RB' : (f.broker||''));
+  return {
+    costsAccount: `Investment transaction costs ${suffix}`,
+    depotAccount: `WS ${brokerAbbr} Depot - Costs ${suffix}`,
+    transferAccount: `Admin & Transfer ${suffix}`,
+    bankAccount: resolveBankAccount(f.broker, doc.owner, doc.securityCurrency)
+  };
+}
+
 function computeAmounts(trxCurrency, securityCurrency, rawGrossMag, rawExpenseMag, dateISO){
   const trxFx = trxCurrency==='CHF' ? {rate:1,date:dateISO} : fxRateToCHF(trxCurrency, dateISO);
   const secFx = securityCurrency==='CHF' ? {rate:1,date:dateISO} : fxRateToCHF(securityCurrency, dateISO);
@@ -515,11 +557,24 @@ function renderAll(){
           </div>
         </div>
 
+        <p class="subhead"><span class="step">3</span> FIBU-Konten</p>
+        <div class="grid" data-role="fibugrid" style="${doc.fibu ? '' : 'display:none;'}">
+          <div class="cell"><label>Kostenkonto</label><input type="text" data-role="fibuCosts" value="${(doc.fibu&&doc.fibu.costsAccount)||''}"></div>
+          <div class="cell"><label>Depotkonto</label><input type="text" data-role="fibuDepot" value="${(doc.fibu&&doc.fibu.depotAccount)||''}"></div>
+          <div class="cell"><label>Transferkonto</label><input type="text" data-role="fibuTransfer" value="${(doc.fibu&&doc.fibu.transferAccount)||''}"></div>
+          <div class="cell learn"><label>Bankkonto</label>
+            <input type="text" data-role="fibuBank" value="${(doc.fibu&&doc.fibu.bankAccount)||''}">
+            <div class="learnrow"><button class="ghost" data-role="learnBank">Merken</button><span class="status" data-role="bankStatus"></span></div>
+          </div>
+        </div>
+        <p class="panel-note" data-role="fibuhint" style="${doc.fibu ? 'display:none;' : ''}">Erscheint nach "Werte berechnen".</p>
+
         <div class="calc-panel" data-role="calcpanel" style="${doc.calc ? '' : 'display:none;'}"></div>
       </div>
       <div class="stub-foot">
         <span class="status" data-role="status">${doc.status||''}</span>
         <div class="foot-actions">
+          <button class="secondary" data-role="download">PDF umbenennen &amp; herunterladen</button>
           <button class="accent" data-role="calc">Werte berechnen</button>
           <button class="danger" data-role="delete">Löschen</button>
         </div>
@@ -589,6 +644,22 @@ function renderAll(){
       matchEl.innerHTML = '<div class="match-note miss">⚠ Keine Wertschrift in den Stammdaten gefunden — bitte SecurityID/Name/Währung manuell prüfen und eintragen.</div>';
     }
 
+    // FIBU account fields
+    stub.querySelector('[data-role="fibuCosts"]').addEventListener('input', e=>{ if(doc.fibu) doc.fibu.costsAccount = e.target.value; });
+    stub.querySelector('[data-role="fibuDepot"]').addEventListener('input', e=>{ if(doc.fibu) doc.fibu.depotAccount = e.target.value; });
+    stub.querySelector('[data-role="fibuTransfer"]').addEventListener('input', e=>{ if(doc.fibu) doc.fibu.transferAccount = e.target.value; });
+    stub.querySelector('[data-role="fibuBank"]').addEventListener('input', e=>{ if(doc.fibu) doc.fibu.bankAccount = e.target.value; });
+    stub.querySelector('[data-role="learnBank"]').addEventListener('click', async ()=>{
+      const statusEl = stub.querySelector('[data-role="bankStatus"]');
+      if(!doc.fibu || !doc.fibu.bankAccount){ statusEl.className='status err'; statusEl.textContent='Erst berechnen + Bankkonto ausfüllen'; return; }
+      statusEl.className='status'; statusEl.textContent='Speichere…';
+      try{
+        await commitRule('FIBUKonto', {broker: f.broker, owner: doc.owner, currency: doc.securityCurrency}, doc.fibu.bankAccount);
+        statusEl.className='status ok'; statusEl.textContent='✓ gemerkt';
+      } catch(e){ statusEl.className='status err'; statusEl.textContent='✗ '+e.message; }
+    });
+
+    stub.querySelector('[data-role="download"]').addEventListener('click', ()=> downloadRenamedPdf(doc, stub));
     stub.querySelector('[data-role="calc"]').addEventListener('click', ()=> calcOne(doc, stub));
     stub.querySelector('[data-role="delete"]').addEventListener('click', ()=>{
       docs = docs.filter(d => d.id !== doc.id);
@@ -612,6 +683,38 @@ function renderCalcPanel(doc, stub){
 }
 function updateBulkCount(){
   document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet · ' + docs.length + ' gesamt';
+}
+
+/* ================= Local rename & download (PDF never leaves browser) ================= */
+function findMasterById(securityId){
+  return securityMaster.find(r => String(r.SecurityID)===String(securityId)) || null;
+}
+function buildFilenameWertschriften(doc){
+  const f = doc.fields;
+  if(!doc.calc) return null;
+  const dateCompact = (f.datum||'').replace(/-/g,'') || 'YYYYMMDD';
+  const master = findMasterById(doc.securityId);
+  const valor = (master && master.ID_Valor) || doc.securityId || 'X';
+  const buyOrSell = f.typ==='Verkauf' ? 'Sell' : 'Buy';
+  const cry = doc.securityCurrency || '';
+  const amt = Math.abs(doc.calc.AmtLC).toFixed(2);
+  const brokerAbbr = f.broker==='Swissquote' ? 'SQ' : (f.broker==='Raiffeisen' ? 'RB' : (f.broker||''));
+  const ref = f.referenz || '';
+  return `${dateCompact}_VN_${valor}_${buyOrSell}_(${cry}_${amt})_${brokerAbbr}_${ref}.pdf`;
+}
+function downloadRenamedPdf(doc, stubEl){
+  const filename = buildFilenameWertschriften(doc);
+  if(!filename){
+    const statusEl = stubEl.querySelector('[data-role="status"]');
+    statusEl.className='status err'; statusEl.textContent='✗ Bitte zuerst "Werte berechnen" klicken';
+    return;
+  }
+  const blob = new Blob([doc.arrayBuffer], {type:'application/pdf'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
 
 /* ================= File ingestion ================= */
@@ -641,7 +744,7 @@ async function handleFiles(fileList){
       securityCurrency: secMatch ? secMatch.Currency : (fields.waehrung||''),
       projectId: projMatch ? projMatch.Value : '',
       entryNo: entryMatch ? entryMatch.Value : '',
-      calc: null, status: ''
+      calc: null, fibu: null, status: ''
     });
   }
   renderAll();
@@ -656,6 +759,15 @@ fileInput.addEventListener('change', (e)=> handleFiles(e.target.files));
 dropzone.addEventListener('drop', (e)=> handleFiles(e.dataTransfer.files));
 
 /* ================= Calculation ================= */
+function refreshFibuFields(doc, stubEl){
+  if(!doc.fibu) return;
+  stubEl.querySelector('[data-role="fibugrid"]').style.display = '';
+  stubEl.querySelector('[data-role="fibuhint"]').style.display = 'none';
+  stubEl.querySelector('[data-role="fibuCosts"]').value = doc.fibu.costsAccount;
+  stubEl.querySelector('[data-role="fibuDepot"]').value = doc.fibu.depotAccount;
+  stubEl.querySelector('[data-role="fibuTransfer"]').value = doc.fibu.transferAccount;
+  stubEl.querySelector('[data-role="fibuBank"]').value = doc.fibu.bankAccount;
+}
 async function calcOne(doc, stubEl){
   const statusEl = stubEl.querySelector('[data-role="status"]');
   const f = doc.fields;
@@ -681,8 +793,10 @@ async function calcOne(doc, stubEl){
       AmtCHF_expenses: sign*result.AmtCHF + result.ExpenseCHF,
       CurrencyPrice: result.CurrencyPrice, CurrencyPriceDate: result.CurrencyPriceDate
     };
+    doc.fibu = resolveFibuAccounts(doc);
     statusEl.className='status ok'; statusEl.textContent='✓ Berechnet · '+new Date().toLocaleTimeString('de-CH');
     renderCalcPanel(doc, stubEl);
+    refreshFibuFields(doc, stubEl);
     updateBulkCount();
   } catch(e){
     statusEl.className='status err'; statusEl.textContent='✗ '+e.message;
@@ -784,6 +898,43 @@ document.getElementById('testConn').addEventListener('click', async ()=>{
   } catch(e){ el.className='status err'; el.textContent='✗ ' + e.message; }
 });
 
+/* ================= Export: FIBUentries (XLSX, 5-row double-entry per transaction) ================= */
+const FIBU_COLUMNS = ['MainID','PartyNo','Shop','Location','ProjectID','AmtCHF','Cry','AmtCry','Valuta','DateClearance','Comment','TrxArt'];
+function fmt2(n){ return (Math.round((n + Number.EPSILON) * 100) / 100).toFixed(2); }
+function buildFibuRows(doc){
+  if(!doc.calc || !doc.fibu || !doc.projectId) return [];
+  const f = doc.fields;
+  const c = doc.calc;
+  const cry = doc.securityCurrency;
+  const trxArt = f.typ==='Verkauf' ? 'WS_Sell' : 'WS_Buy';
+  const valutaTrx = toDDMMYYYY(f.datum);
+  const valutaValuta = toDDMMYYYY(f.valutadatum) || valutaTrx;
+  const sameDate = !f.valutadatum || f.datum === f.valutadatum;
+  const bankCry = cry==='CHF' ? '' : cry;
+  const base = {PartyNo: doc.securityName, Shop:'', Location:'', ProjectID: doc.projectId, Comment:'', TrxArt: trxArt};
+  const rows = [
+    Object.assign({}, base, {MainID: doc.fibu.costsAccount, AmtCHF: fmt2(c.ExpenseCHF), Cry: cry, AmtCry: fmt2(c.ExpenseLC), Valuta: valutaTrx, DateClearance:''}),
+    Object.assign({}, base, {MainID: doc.fibu.depotAccount, AmtCHF: fmt2(c.AmtCHF), Cry: cry, AmtCry: fmt2(c.AmtLC), Valuta: valutaTrx, DateClearance:''})
+  ];
+  if(!sameDate){
+    rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(-c.AmtLC_expenses), Valuta: valutaTrx, DateClearance: valutaValuta}));
+    rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(c.AmtLC_expenses), Valuta: valutaTrx, DateClearance: valutaValuta}));
+  }
+  rows.push(Object.assign({}, base, {MainID: doc.fibu.bankAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: bankCry, AmtCry: fmt2(-c.AmtLC_expenses), Valuta: sameDate ? valutaTrx : valutaValuta, DateClearance:''}));
+  return rows;
+}
+document.getElementById('downloadFibu').addEventListener('click', ()=>{
+  const rows = docs.flatMap(buildFibuRows);
+  if(rows.length===0){ alert('Keine berechneten Transaktionen mit ausgefüllten FIBU-Konten vorhanden.'); return; }
+  const missing = rows.filter(r => !r.MainID);
+  if(missing.length>0 && !confirm(missing.length+' Zeile(n) haben ein leeres Konto (z.B. Bankkonto nicht gelernt). Trotzdem exportieren?')) return;
+  const data = rows.map(r => { const o={}; FIBU_COLUMNS.forEach(c=> o[c]=r[c]); return o; });
+  const ws = XLSX.utils.json_to_sheet(data, {header: FIBU_COLUMNS});
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'FIBUentries');
+  XLSX.writeFile(wb, 'FIBUentries.xlsx');
+});
+
 /* ================= Export: WSentries (XLSX) ================= */
 const WS_COLUMNS = ['MainID','CustodyID','ProjectID','TrxTypeID','Date','Valuta','Quantity','Cry','AmtCHF','AmtLC',
   'ExpenseCHF','ExpenseLC','Price_CHF','Price_Cry','Price_LC','Comments','EntryNo','Checkp1','Checkp2','Checkp3','Source'];
@@ -794,14 +945,18 @@ function buildWsRow(doc){
   const validaValuta = toDDMMYYYY(f.valutadatum) || valuta;
   const qty = parseSwissNumber(f.anzahl) || 0;
   const signedQty = f.typ==='Verkauf' ? -Math.abs(qty) : Math.abs(qty);
+  const brokerAbbr = f.broker==='Swissquote' ? 'SQ' : (f.broker==='Raiffeisen' ? 'RB' : (f.broker||''));
   return {
     MainID: doc.securityName, CustodyID: doc.custodyId, ProjectID: doc.projectId,
     TrxTypeID: f.typ==='Verkauf' ? 'Sell' : 'Buy',
     Date: valuta, Valuta: validaValuta, Quantity: signedQty, Cry: doc.securityCurrency,
     AmtCHF: doc.calc.AmtCHF.toFixed(2), AmtLC: doc.calc.AmtLC.toFixed(2),
     ExpenseCHF: doc.calc.ExpenseCHF.toFixed(2), ExpenseLC: doc.calc.ExpenseLC.toFixed(2),
-    Price_CHF:'', Price_Cry:'', Price_LC:'', Comments:'', EntryNo: doc.entryNo,
-    Checkp1:'', Checkp2:'', Checkp3:'', Source:''
+    Price_CHF:'', Price_Cry:'', Price_LC:'',
+    Comments: (brokerAbbr + ' ' + (f.referenz||'')).trim(),
+    EntryNo: doc.entryNo,
+    Checkp1:'', Checkp2:'', Checkp3:'',
+    Source: 'CodingPilot_Wertschriften ' + APP_VERSION
   };
 }
 document.getElementById('downloadWs').addEventListener('click', ()=>{
