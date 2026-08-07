@@ -113,7 +113,7 @@
     <div class="section-head"><span class="section-title">01 — Belege hochladen</span></div>
     <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="PDF-Dateien auswählen oder hierher ziehen">
       <strong>PDFs hierher ziehen oder klicken zum Auswählen</strong>
-      <span>Erwartet: Swissquote-Börsentransaktionen (Kauf/Verkauf) oder Raiffeisen-Zeichnungen</span>
+      <span>Erwartet: Swissquote-Börsentransaktionen (Wertschriften &amp; Krypto, Kauf/Verkauf) oder Raiffeisen-Zeichnungen</span>
       <input type="file" id="fileInput" accept="application/pdf" multiple>
     </div>
   </section>
@@ -257,11 +257,26 @@ function parseRaiffeisenZeichnung(t,r){
   r.valutadatum = toISO(grab(/Valuta\s+(\d{2}\.\d{2}\.\d{4})/i, t));
   r.isin = grab(/ISIN[-\s]?(?:Nr\.?)?:?\s*([A-Z]{2}[A-Z0-9]{9}\d)/i, t);
   const gm = t.match(/gezeichnet:\s*\n?\s*([\d'.,]+)\s+([^\n]+)/i);
-  if(gm){ r.anzahl = gm[1]; r.titel = gm[2].replace(/\s*-\s*$/,'').trim(); }
+  if(gm){ r.anzahl = gm[1]; r.titel = gm[2].replace(/Valoren-Nr\.[\s\S]*$/i,'').replace(/\s*-\s*$/,'').trim(); }
   r.waehrung = 'CHF';
   r.betrag = grab(/Kurswert\s+CHF\s+(-?[\d.,']+)/i, t);
   r.gebuehren = grab(/Courtage\s+CHF\s+(-?[\d.,']+)/i, t);
   r.total = grab(/Belastung[\s\S]{0,25}?CHF\s+([\d.,']+)/i, t) || grab(/Total\s+CHF\s+(-?[\d.,']+)/i, t);
+}
+function parseSwissquoteKryptoKauf(t,r){
+  const m = t.match(/(Kauf|Verkauf)\s*\n?\s*Unsere Referenz/i);
+  r.typ = m ? m[1] : 'Kauf';
+  r.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t);
+  r.konto = grab(/Kunde:\s*(\d+)/i, t);
+  r.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.valutadatum = toISO(grab(/Valutadatum\s+(\d{2}\.\d{2}\.\d{4})/i, t));
+  const qm = t.match(/Anzahl\s+Währung\s+Rate\s+([\d.,']+)\s+([A-Z]{2,5})\s+([\d.,']+)/i);
+  if(qm){ r.anzahl=qm[1]; r.titel=qm[2]; r.kurs=qm[3]; }
+  const bm = t.match(/Bruttobetrag\s+([A-Z]{3})\s+([\d.,']+)/i);
+  if(bm){ r.waehrung=bm[1]; r.betrag=bm[2]; }
+  r.gebuehren = grab(/Kommission Swissquote Bank AG\s+[A-Z]{3}\s+([\d.,']+)/i, t);
+  r.total = grab(/Total\s+[A-Z]{3}\s+([\d.,']+)/i, t);
+  r.isin = ''; // Krypto hat keine ISIN — Matching läuft über den Ticker/Namen (r.titel)
 }
 function blankFields(){
   return {broker:'',typ:'',datum:'',valutadatum:'',referenz:'',konto:'',titel:'',isin:'',anzahl:'',kurs:'',waehrung:'',betrag:'',gebuehren:'',total:'',hinweis:''};
@@ -274,7 +289,8 @@ function parse(rawText){
     if(r.broker==='Raiffeisen' && /Zeichnung/i.test(t)) parseRaiffeisenZeichnung(t, r);
     else if(r.broker==='Swissquote' && /Börsentransaktion:\s*(Kauf|Verkauf)/i.test(t)) parseSwissquoteBoerse(t, r);
     else if(r.broker==='Swissquote' && /Quantity\s+Price\s+Amount/i.test(t)) parseSwissquoteBuyEN(t, r);
-    else { r.hinweis = 'Layout nicht erkannt — dieses Modul deckt nur Kauf/Verkauf/Zeichnung ab (kein Krypto, keine Dividenden)'; }
+    else if(r.broker==='Swissquote' && /Anzahl\s+Währung\s+Rate/i.test(t)) parseSwissquoteKryptoKauf(t, r);
+    else { r.hinweis = 'Layout nicht erkannt — dieses Modul deckt Kauf/Verkauf/Zeichnung (Wertschriften & Krypto) ab, keine Dividenden/Staking'; }
   } catch(e){ r.hinweis = 'Extraktion unvollständig — bitte Felder prüfen'; }
   return r;
 }
