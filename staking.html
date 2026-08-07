@@ -142,12 +142,21 @@
     </div>
   </footer>
 
+  <footer style="margin-top:32px;padding-top:16px;border-top:1px solid var(--line);font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);">
+    <span id="appVersion"></span>
+  </footer>
+
 </div>
 
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 /* ================= State ================= */
+/* ================= Versioning =================
+   Manuell hochgezählt bei jeder Anpassung an einem neuen Tag. Heute: V1. */
+const APP_VERSION = 'V1 - 07.08.2026';
+document.getElementById('appVersion').textContent = APP_VERSION;
+
 let docs = []; // {id, name, arrayBuffer, text, asset, datum, quantity, referenz, hinweis, calc, status}
 let seq = 0;
 const KNOWN_ASSETS = ['ETH','SOL'];
@@ -471,7 +480,7 @@ function buildWsRow(doc){
     AmtCHF: doc.calc.AmtCHF, AmtLC: doc.calc.AmtLC, ExpenseCHF:'0.00', ExpenseLC:'0.00',
     Price_CHF:'', Price_Cry:'', Price_LC:'',
     Comments: 'Staking SQ ' + (doc.referenz||''), EntryNo: asset.entryNoLabel,
-    CheckpointStatus:'Required', CheckpointStatusComment:'', CheckpointID:'', Source:'Excel'
+    CheckpointStatus:'Required', CheckpointStatusComment:'', CheckpointID:'', Source:'CodingPilot_Staking ' + APP_VERSION
   };
 }
 document.getElementById('downloadWs').addEventListener('click', ()=>{
