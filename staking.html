@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Coding Pilot · Staking</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
     --paper:#F6F3EC; --paper-dark:#EDE8DC; --ink:#1C2430; --ink-soft:#5B6472; --line:#D8D1BF;
@@ -134,6 +135,8 @@
     <span class="count" id="bulkCount"></span>
     <div class="btn-row">
       <button class="accent" id="calcAll">Alle Preise abrufen &amp; berechnen</button>
+      <button class="secondary" id="downloadBooking">FIBUentries (XLSX) herunterladen</button>
+      <button class="secondary" id="downloadWs">WSentries (XLSX) herunterladen</button>
     </div>
   </footer>
 
@@ -150,7 +153,28 @@ const KNOWN_ASSETS = ['ETH','SOL'];
 /* ================= Helpers ================= */
 function grab(re, t, idx){ idx = idx || 1; const m = t.match(re); return m ? m[idx].trim() : ''; }
 function toISO(d){ if(!d) return ''; const m = d.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/); if(!m) return ''; return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'); }
+function toDDMMYYYY(iso){ if(!iso) return ''; const m = iso.match(/(\d{4})-(\d{2})-(\d{2})/); if(!m) return ''; return m[3]+'.'+m[2]+'.'+m[1]; }
 function roundTo2(n){ return Math.round((n + Number.EPSILON) * 100) / 100; }
+function suggestCustodySQ(text){
+  if(/Philipp/i.test(text)) return 'SQ PG';
+  if(/Ver[oó]nica/i.test(text)) return 'SQ VP';
+  return '';
+}
+function personSuffix(custody){ return (custody||'').trim().split(/\s+/).pop() || ''; }
+
+/* Fixed asset metadata for the staking exports (ProjectID/EntryNo spellings preserved exactly
+   as used in the existing accounting system, including the "Etherum" naming for ETH). */
+const ASSET_CONFIG = {
+  ETH: { mainId: 'ETH - Ethereum', projectId: 'INV_Etherum_2024 ff.', entryNoLabel: 'ETH - Etherum - Staking' },
+  SOL: { mainId: 'SOL - Solana',   projectId: 'INV_Solana_2025 ff.',  entryNoLabel: 'SOL - Solana - Staking' }
+};
+
+function buildFilenameStaking(doc){
+  const dateCompact = (doc.datum||'').replace(/-/g,'') || 'YYYYMMDD';
+  const asset = doc.asset || 'X';
+  const ref = doc.referenz || '';
+  return `${dateCompact}_${asset}_Kauf_SQ_${ref}.pdf`;
+}
 
 /* ================= PDF text extraction ================= */
 async function extractPdfText(arrayBuffer){
@@ -172,9 +196,10 @@ async function extractPdfText(arrayBuffer){
 
 /* ================= Staking receipt parser ================= */
 function parseStaking(t){
-  const out = {asset:'', datum:'', quantity:'', referenz:'', hinweis:''};
+  const out = {asset:'', datum:'', quantity:'', referenz:'', custody:'', hinweis:''};
   out.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t) || grab(/Our reference\s*:\s*(\d+)/i, t);
   out.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  out.custody = suggestCustodySQ(t);
   const qm = t.match(/Anzahl\s+Währung\s+([\d.,']+)\s+([A-Z]{2,5})/i);
   if(qm){ out.quantity = qm[1]; out.asset = qm[2].toUpperCase(); }
   if(!out.quantity){
@@ -204,7 +229,7 @@ function renderAll(){
   }
   document.getElementById('resultCount').textContent = docs.length + ' Beleg(e)';
   document.getElementById('bulkFooter').style.display = 'flex';
-  document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet';
+  document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet · ' + docs.filter(d=>d.calc && d.custody).length + ' exportbereit';
 
   docs.forEach(doc => {
     const stub = document.createElement('div');
@@ -229,12 +254,20 @@ function renderAll(){
           <div class="cell"><label>Transaktionsdatum</label><input type="date" data-role="datum" value="${doc.datum||''}"></div>
           <div class="cell"><label>Quantity (Netto Gutschrift)</label><input type="text" data-role="quantity" value="${doc.quantity||''}"></div>
           <div class="cell"><label>Transaktionsnummer</label><input type="text" data-role="referenz" value="${doc.referenz||''}"></div>
+          <div class="cell"><label>Verwahrung</label>
+            <select data-role="custody">
+              <option value="">— wählen —</option>
+              <option value="SQ PG" ${doc.custody==='SQ PG'?'selected':''}>SQ PG</option>
+              <option value="SQ VP" ${doc.custody==='SQ VP'?'selected':''}>SQ VP</option>
+            </select>
+          </div>
         </div>
         <div class="calc-panel" data-role="calcpanel" style="${doc.calc ? '' : 'display:none;'}"></div>
       </div>
       <div class="stub-foot">
         <span class="status" data-role="status">${doc.status||''}</span>
         <div class="btn-row">
+          <button class="secondary" data-role="download">PDF umbenennen &amp; herunterladen</button>
           <button class="accent" data-role="calc">Preise abrufen &amp; berechnen</button>
         </div>
       </div>
@@ -243,6 +276,8 @@ function renderAll(){
     stub.querySelector('[data-role="datum"]').addEventListener('input', e => doc.datum = e.target.value);
     stub.querySelector('[data-role="quantity"]').addEventListener('input', e => doc.quantity = e.target.value);
     stub.querySelector('[data-role="referenz"]').addEventListener('input', e => doc.referenz = e.target.value);
+    stub.querySelector('[data-role="custody"]').addEventListener('change', e => doc.custody = e.target.value);
+    stub.querySelector('[data-role="download"]').addEventListener('click', ()=> downloadRenamedPdf(doc));
     stub.querySelector('[data-role="calc"]').addEventListener('click', ()=> calcOne(doc, stub));
     renderCalcPanel(doc, stub);
     container.appendChild(stub);
@@ -261,16 +296,27 @@ function renderCalcPanel(doc, stub){
   `;
 }
 
+/* ================= Local rename & download (PDF never leaves browser) ================= */
+function downloadRenamedPdf(doc){
+  const filename = buildFilenameStaking(doc);
+  const blob = new Blob([doc.arrayBuffer], {type:'application/pdf'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
 /* ================= File ingestion ================= */
 async function handleFiles(fileList){
   for(const file of fileList){
     if(file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) continue;
     const id = ++seq;
     const buf = await file.arrayBuffer();
-    let text = '', parsed = {asset:'',datum:'',quantity:'',referenz:'',hinweis:'PDF konnte nicht gelesen werden'};
+    let text = '', parsed = {asset:'',datum:'',quantity:'',referenz:'',custody:'',hinweis:'PDF konnte nicht gelesen werden'};
     try{ text = await extractPdfText(buf); parsed = parseStaking(text); } catch(e){}
     docs.push({id, name:file.name, arrayBuffer:buf, text,
-      asset:parsed.asset, datum:parsed.datum, quantity:parsed.quantity, referenz:parsed.referenz,
+      asset:parsed.asset, datum:parsed.datum, quantity:parsed.quantity, referenz:parsed.referenz, custody:parsed.custody,
       hinweis:parsed.hinweis, calc:null, status:''});
   }
   renderAll();
@@ -362,7 +408,7 @@ async function calcOne(doc, stubEl){
     };
     statusEl.className='status ok'; statusEl.textContent='✓ Berechnet · '+new Date().toLocaleTimeString('de-CH');
     renderCalcPanel(doc, stubEl);
-    document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet';
+    document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet · ' + docs.filter(d=>d.calc && d.custody).length + ' exportbereit';
   } catch(e){
     statusEl.className='status err'; statusEl.textContent='✗ '+e.message;
   }
@@ -372,6 +418,58 @@ document.getElementById('calcAll').addEventListener('click', async ()=>{
     const stubEl = [...document.querySelectorAll('.stub')].find(el => el.querySelector('.filename').textContent === doc.name);
     if(stubEl) await calcOne(doc, stubEl);
   }
+});
+
+/* ================= Export 1: Buchungssätze (CSV, double-entry per transaction) ================= */
+const BOOKING_COLUMNS = ['MainID','PartyNo','Shop','Location','ProjectID','AmtCHF','Cry','AmtCry','Valuta','DateClearance','Comment','TrxArt'];
+function buildBookingRows(doc){
+  const asset = ASSET_CONFIG[doc.asset];
+  if(!asset || !doc.calc || !doc.custody) return [];
+  const suffix = personSuffix(doc.custody);
+  const valuta = toDDMMYYYY(doc.datum);
+  const amtChf = doc.calc.AmtCHF;
+  const amtCry = doc.calc.AmtLC;
+  return [
+    {MainID:`WS income (taxable) ${suffix}`, PartyNo:'', Shop:'', Location:'', ProjectID:asset.projectId,
+     AmtCHF:'-'+amtChf, Cry:'USD', AmtCry:'-'+amtCry, Valuta:valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'OTH'},
+    {MainID:`WS SQ Depot - Costs ${suffix}`, PartyNo:'', Shop:'', Location:'', ProjectID:asset.projectId,
+     AmtCHF:amtChf, Cry:'USD', AmtCry:amtCry, Valuta:valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'OTH'}
+  ];
+}
+document.getElementById('downloadBooking').addEventListener('click', ()=>{
+  const rows = docs.flatMap(buildBookingRows);
+  if(rows.length===0){ alert('Keine berechneten Transaktionen mit gewählter Verwahrung vorhanden.'); return; }
+  const data = rows.map(r => { const o={}; BOOKING_COLUMNS.forEach(c=> o[c]=r[c]); return o; });
+  const ws = XLSX.utils.json_to_sheet(data, {header: BOOKING_COLUMNS});
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'FIBUentries');
+  XLSX.writeFile(wb, 'FIBUentries.xlsx');
+});
+
+/* ================= Export 2: WSentries (XLSX, one row per transaction) ================= */
+const WS_COLUMNS = ['MainID','CustodyID','ProjectID','TrxTypeID','Date','Valuta','Quantity','Cry','AmtCHF','AmtLC',
+  'ExpenseCHF','ExpenseLC','Price_CHF','Price_Cry','Price_LC','Comments','EntryNo','CheckpointStatus','CheckpointStatusComment','CheckpointID','Source'];
+function buildWsRow(doc){
+  const asset = ASSET_CONFIG[doc.asset];
+  if(!asset || !doc.calc || !doc.custody) return null;
+  const valuta = toDDMMYYYY(doc.datum);
+  return {
+    MainID: asset.mainId, CustodyID: doc.custody, ProjectID: asset.projectId, TrxTypeID:'Buy',
+    Date: valuta, Valuta: valuta, Quantity: doc.quantity, Cry:'USD',
+    AmtCHF: doc.calc.AmtCHF, AmtLC: doc.calc.AmtLC, ExpenseCHF:'0.00', ExpenseLC:'0.00',
+    Price_CHF:'', Price_Cry:'', Price_LC:'',
+    Comments: 'Staking SQ ' + (doc.referenz||''), EntryNo: asset.entryNoLabel,
+    CheckpointStatus:'Required', CheckpointStatusComment:'', CheckpointID:'', Source:'Excel'
+  };
+}
+document.getElementById('downloadWs').addEventListener('click', ()=>{
+  const rows = docs.map(buildWsRow).filter(Boolean);
+  if(rows.length===0){ alert('Keine berechneten Transaktionen mit gewählter Verwahrung vorhanden.'); return; }
+  const data = rows.map(r => { const o={}; WS_COLUMNS.forEach(c=> o[c]=r[c]); return o; });
+  const ws = XLSX.utils.json_to_sheet(data, {header: WS_COLUMNS});
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'WSentries');
+  XLSX.writeFile(wb, 'WSentries_Staking_' + new Date().toISOString().slice(0,10) + '.xlsx');
 });
 </script>
 </body>
