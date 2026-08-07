@@ -1,5 +1,5 @@
 """
-Exportiert die letzten N Tage Kursdaten für ausgewählte Securities aus Turso
+Importiert die letzten N Tage Kursdaten für ausgewählte Securities aus Turso
 nach Data/security_prices_recent.csv (im codingpilot-Repo).
 
 Aktuell: ETH, SOL, USD/CHF, EUR/CHF.
