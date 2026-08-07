@@ -89,7 +89,7 @@
 
   <div class="eyebrow">Coding Pilot · Subpage <a href="index.html">← zurück zur Übersicht</a></div>
   <h1>Staking</h1>
-  <p class="lede">Staking-Belege (ETH/SOL) hochladen, Netto-Gutschrift und Transaktionsdaten auslesen, Kurse aus Turso beziehen und AmtLC/AmtCHF berechnen.</p>
+  <p class="lede">Staking-Belege (ETH/SOL) hochladen, Netto-Gutschrift und Transaktionsdaten auslesen, Kurse aus dem GitHub-Import beziehen und AmtLC/AmtCHF berechnen.</p>
   <div class="guarantee"><span class="dot"></span> Die PDF-Datei selbst verlässt den Browser nie.</div>
 
   <section>
@@ -102,33 +102,22 @@
   </section>
 
   <section>
-    <div class="section-head"><span class="section-title">02 — Turso-Preisquelle</span></div>
-    <details class="panel" id="tursoPanel">
-      <summary>Verbindung &amp; Security-IDs konfigurieren</summary>
+    <div class="section-head"><span class="section-title">02 — Kursdaten-Import</span></div>
+
+    <details class="panel" id="githubSourcePanel" open>
+      <summary>Import aus GitHub (Data/security_prices_recent.csv)</summary>
       <div class="panel-body">
-        <div class="field-row"><label for="tursoUrl">Datenbank-URL</label>
-          <input type="text" id="tursoUrl" class="mono" placeholder="https://dein-db-name-org.turso.io"></div>
-        <div class="field-row"><label for="tursoToken">Auth-Token</label>
-          <input type="password" id="tursoToken" class="mono" placeholder="eyJhbGciOi..."></div>
+        <div class="field-row"><label for="pricesCsvUrl">CSV-URL</label>
+          <input type="text" id="pricesCsvUrl" class="mono" value="https://raw.githubusercontent.com/Munotstadt/codingpilot/main/Data/security_prices_recent.csv"></div>
         <div class="field-row"><label for="idEth">SecurityID ETH</label>
           <input type="text" id="idEth" class="mono" value="40149561"></div>
         <div class="field-row"><label for="idSol">SecurityID SOL</label>
           <input type="text" id="idSol" class="mono" value="22000"></div>
         <div class="field-row"><label for="idFx">SecurityID USD/CHF</label>
           <input type="text" id="idFx" class="mono" value="275000"></div>
-        <div class="field-row"><label for="sqlTemplate">SQL-Vorlage (Preisabfrage)</label>
-          <textarea id="sqlTemplate" class="mono">SELECT Price, PriceDate FROM security_prices WHERE SecurityID = {securityId} AND date(PriceDate) &lt;= date('{date}') ORDER BY PriceDate DESC LIMIT 1</textarea></div>
-        <p class="panel-note">Platzhalter <code>{securityId}</code> und <code>{date}</code> werden ersetzt. <code>date(PriceDate)</code> schneidet eine eventuell vorhandene Uhrzeit ab, sodass nur der Kalendertag verglichen wird; <code>ORDER BY PriceDate DESC</code> sortiert nach dem vollen Zeitstempel, liefert also — falls am gesuchten Tag mehrere Kurse erfasst sind — den letzten Preis dieses Tages. Ist an dem Tag kein Kurs vorhanden, wird auf den letzten verfügbaren Tag davor zurückgefallen. Spaltennamen (<code>Price</code>, <code>PriceDate</code>) entsprechen deinem <code>security_prices</code>-Schema.</p>
-        <div class="field-row" style="grid-template-columns:auto 1fr;">
-          <input type="checkbox" id="tursoRemember" style="width:auto;">
-          <label for="tursoRemember" style="cursor:pointer;">Zugangsdaten in diesem Browser merken (localStorage)</label>
-        </div>
-        <p class="panel-note"><strong>Wirkt nur außerhalb der Claude.ai-Vorschau</strong> — z.B. sobald diese Seite auf GitHub Pages läuft.</p>
-        <div class="btn-row">
-          <button class="secondary" id="testConn">Verbindung testen</button>
-          <button class="secondary" id="clearSaved">Gespeicherte Zugangsdaten löschen</button>
-        </div>
-        <p class="status" id="tursoStatus"></p>
+        <p class="panel-note">Wird von der GitHub Action <strong>"Import Turso Security Prices"</strong> befüllt (2× täglich, 03:00/15:00 UTC), die die letzten 90 Tage für ETH, SOL, USD/CHF und EUR/CHF aus Turso importiert. <code>raw.githubusercontent.com</code> erlaubt Cross-Origin-Zugriffe aus dem Browser ohne Proxy — keine Zugangsdaten nötig.</p>
+        <div class="btn-row"><button class="secondary" id="loadCsvPrices">Kursdaten importieren</button></div>
+        <p class="status" id="csvStatus"></p>
       </div>
     </details>
   </section>
@@ -295,121 +284,75 @@ fileInput.addEventListener('change', (e)=> handleFiles(e.target.files));
 ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
 dropzone.addEventListener('drop', (e)=> handleFiles(e.dataTransfer.files));
 
-/* ================= Turso price collector ================= */
-function detectLocalStorage(){
-  try{ const k='__probe__'; window.localStorage.setItem(k,'1'); window.localStorage.removeItem(k); return window.localStorage; }
-  catch(e){ return null; }
-}
-const LS = detectLocalStorage();
-const LS_KEY = 'codingpilot_staking_turso_v1';
-function loadSavedConfig(){ if(!LS) return null; try{ const raw=LS.getItem(LS_KEY); return raw?JSON.parse(raw):null; }catch(e){ return null; } }
-function persistConfigIfEnabled(){
-  const remember = document.getElementById('tursoRemember').checked;
-  if(!remember || !LS) return;
-  try{ LS.setItem(LS_KEY, JSON.stringify(tursoConfig())); } catch(e){}
-}
-function clearSavedConfig(){ if(LS){ try{ LS.removeItem(LS_KEY); }catch(e){} } }
-(function init(){
-  const saved = loadSavedConfig();
-  if(saved){
-    document.getElementById('tursoUrl').value = saved.url || '';
-    document.getElementById('tursoToken').value = saved.token || '';
-    document.getElementById('idEth').value = saved.idEth || '40149561';
-    document.getElementById('idSol').value = saved.idSol || '22000';
-    document.getElementById('idFx').value = saved.idFx || '275000';
-    if(saved.sqlTemplate) document.getElementById('sqlTemplate').value = saved.sqlTemplate;
-    document.getElementById('tursoRemember').checked = true;
+/* ================= GitHub CSV price source ================= */
+let priceData = []; // [{SecurityID, PriceDate, Price}]
+function splitCsvLine(line){
+  const result=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(inQ){ if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else inQ=false; } else cur+=c; }
+    else { if(c==='"') inQ=true; else if(c===','){ result.push(cur); cur=''; } else cur+=c; }
   }
-  if(!LS) document.getElementById('tursoRemember').disabled = true;
-  ['tursoUrl','tursoToken','idEth','idSol','idFx','sqlTemplate'].forEach(id=>{
-    document.getElementById(id).addEventListener('input', persistConfigIfEnabled);
-  });
-  document.getElementById('tursoRemember').addEventListener('change', (e)=>{
-    if(e.target.checked) persistConfigIfEnabled(); else clearSavedConfig();
-  });
-  document.getElementById('clearSaved').addEventListener('click', ()=>{
-    clearSavedConfig();
-    document.getElementById('tursoRemember').checked = false;
-    const el = document.getElementById('tursoStatus');
-    el.className='status'; el.textContent='Gespeicherte Zugangsdaten gelöscht.';
-  });
-})();
-
-function tursoConfig(){
-  return {
-    url: document.getElementById('tursoUrl').value.trim().replace(/\/$/,''),
-    token: document.getElementById('tursoToken').value.trim(),
-    idEth: document.getElementById('idEth').value.trim(),
-    idSol: document.getElementById('idSol').value.trim(),
-    idFx: document.getElementById('idFx').value.trim(),
-    sqlTemplate: document.getElementById('sqlTemplate').value
-  };
+  result.push(cur);
+  return result;
 }
-async function tursoExecute(sql){
-  const cfg = tursoConfig();
-  if(!cfg.url || !cfg.token) throw new Error('Turso-URL und Token erforderlich');
-  const res = await fetch(cfg.url + '/v2/pipeline', {
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+cfg.token},
-    body: JSON.stringify({requests:[{type:'execute', stmt:{sql}}, {type:'close'}]})
-  });
-  const text = await res.text();
-  if(!res.ok) throw new Error('HTTP '+res.status+': '+text.slice(0,300));
-  let json;
-  try{ json = JSON.parse(text); } catch(e){ throw new Error('Unerwartete Antwort: '+text.slice(0,300)); }
-  const execResult = json.results && json.results[0];
-  if(!execResult) throw new Error('Keine Antwort erhalten');
-  if(execResult.type === 'error') throw new Error((execResult.error && execResult.error.message) || 'Turso-Fehler');
-  const result = execResult.response && execResult.response.result;
-  if(!result || !result.rows) return [];
-  const cols = (result.cols||[]).map(c=>c.name);
-  return result.rows.map(row => {
+function parseCsvText(text){
+  const lines = text.replace(/\r/g,'').split('\n').filter(l=>l.length);
+  if(lines.length===0) return [];
+  const headers = splitCsvLine(lines[0]).map(h=>h.trim());
+  return lines.slice(1).map(line=>{
+    const vals = splitCsvLine(line);
     const obj = {};
-    row.forEach((cell,i) => {
-      let v = cell ? cell.value : null;
-      if(cell && (cell.type==='float' || cell.type==='integer') && v!==null) v = Number(v);
-      obj[cols[i] || ('col'+i)] = v;
-    });
+    headers.forEach((h,i)=> obj[h] = vals[i]!==undefined ? vals[i] : '');
     return obj;
   });
 }
-function extractPriceRow(row){
-  let price=null, date=null;
-  for(const [k,v] of Object.entries(row)){
-    if(price===null && typeof v==='number') price=v;
-    else if(date===null && typeof v==='string') date=v;
-  }
-  return {price, date};
+function lookupPriceFromDataset(securityId, dateISO){
+  const rows = priceData.filter(r => String(r.SecurityID)===String(securityId) && r.PriceDate && r.PriceDate.slice(0,10) <= dateISO);
+  if(rows.length===0) return null;
+  rows.sort((a,b) => a.PriceDate < b.PriceDate ? -1 : (a.PriceDate > b.PriceDate ? 1 : 0));
+  const last = rows[rows.length-1];
+  return {price: parseFloat(last.Price), date: last.PriceDate};
 }
-async function fetchPrice(securityId, dateISO){
-  const cfg = tursoConfig();
-  const sql = cfg.sqlTemplate.split('{securityId}').join(securityId).split('{date}').join(dateISO);
-  const rows = await tursoExecute(sql);
-  if(rows.length === 0) return null;
-  return extractPriceRow(rows[0]);
-}
-
-document.getElementById('testConn').addEventListener('click', async ()=>{
-  const el = document.getElementById('tursoStatus');
-  el.className='status'; el.textContent='Prüfe Verbindung…';
-  try{ await tursoExecute('SELECT 1'); el.className='status ok'; el.textContent='✓ Verbindung erfolgreich'; }
-  catch(e){ el.className='status err'; el.textContent='✗ '+e.message; }
+document.getElementById('loadCsvPrices').addEventListener('click', async ()=>{
+  const el = document.getElementById('csvStatus');
+  el.className='status'; el.textContent='Lade Kursdaten…';
+  try{
+    const url = document.getElementById('pricesCsvUrl').value.trim();
+    const res = await fetch(url, {cache:'no-store'});
+    if(!res.ok) throw new Error('HTTP '+res.status+' — Datei nicht gefunden oder Repo/Pfad falsch');
+    const text = await res.text();
+    priceData = parseCsvText(text);
+    const bySecurity = {};
+    priceData.forEach(r => { bySecurity[r.SecurityID] = (bySecurity[r.SecurityID]||0)+1; });
+    el.className='status ok';
+    el.textContent = '✓ ' + priceData.length + ' Kurse importiert (' + Object.keys(bySecurity).length + ' Security(ies))';
+  } catch(e){ el.className='status err'; el.textContent='✗ '+e.message; }
 });
+
+function idConfig(){
+  return {
+    idEth: document.getElementById('idEth').value.trim(),
+    idSol: document.getElementById('idSol').value.trim(),
+    idFx: document.getElementById('idFx').value.trim()
+  };
+}
 
 async function calcOne(doc, stubEl){
   const statusEl = stubEl.querySelector('[data-role="status"]');
-  const cfg = tursoConfig();
   if(!KNOWN_ASSETS.includes(doc.asset)){ statusEl.className='status err'; statusEl.textContent='✗ Asset muss ETH oder SOL sein'; return; }
   if(!doc.datum){ statusEl.className='status err'; statusEl.textContent='✗ Transaktionsdatum fehlt'; return; }
   const qty = parseFloat(String(doc.quantity).replace(/'/g,'').replace(',','.'));
   if(isNaN(qty)){ statusEl.className='status err'; statusEl.textContent='✗ Quantity ist keine gültige Zahl'; return; }
-  statusEl.className='status'; statusEl.textContent='Rufe Preise von Turso ab…';
+  if(priceData.length===0){ statusEl.className='status err'; statusEl.textContent='✗ Kursdaten noch nicht importiert — erst "Kursdaten importieren" klicken'; return; }
+  statusEl.className='status'; statusEl.textContent='Suche Preise im GitHub-Import…';
   try{
+    const cfg = idConfig();
     const assetId = doc.asset === 'ETH' ? cfg.idEth : cfg.idSol;
-    const cryptoRow = await fetchPrice(assetId, doc.datum);
-    if(!cryptoRow || cryptoRow.price===null) throw new Error(doc.asset+'-Preis für '+doc.datum+' nicht gefunden');
-    const fxRow = await fetchPrice(cfg.idFx, doc.datum);
-    if(!fxRow || fxRow.price===null) throw new Error('USD/CHF-Kurs für '+doc.datum+' nicht gefunden');
+    const cryptoRow = lookupPriceFromDataset(assetId, doc.datum);
+    const fxRow = lookupPriceFromDataset(cfg.idFx, doc.datum);
+    if(!cryptoRow || cryptoRow.price===null || isNaN(cryptoRow.price)) throw new Error(doc.asset+'-Preis für '+doc.datum+' nicht gefunden');
+    if(!fxRow || fxRow.price===null || isNaN(fxRow.price)) throw new Error('USD/CHF-Kurs für '+doc.datum+' nicht gefunden');
     const amtLC = roundTo2(qty * cryptoRow.price);
     const amtCHF = roundTo2(amtLC * fxRow.price);
     doc.calc = {
