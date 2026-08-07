@@ -117,8 +117,8 @@
         <div class="field-row"><label for="idFx">SecurityID USD/CHF</label>
           <input type="text" id="idFx" class="mono" value="275000"></div>
         <div class="field-row"><label for="sqlTemplate">SQL-Vorlage (Preisabfrage)</label>
-          <textarea id="sqlTemplate" class="mono">SELECT Price, PriceDate FROM security_prices WHERE SecurityID = {securityId} AND PriceDate &lt;= '{date}' ORDER BY PriceDate DESC LIMIT 1</textarea></div>
-        <p class="panel-note">Platzhalter <code>{securityId}</code> und <code>{date}</code> werden ersetzt. Die Vorlage nimmt den letzten verfügbaren Preis <em>am oder vor</em> dem Transaktionsdatum (überbrückt Handelspausen/Wochenenden). Spaltennamen (<code>Price</code>, <code>PriceDate</code>) bitte an dein tatsächliches Schema anpassen — falls sie nicht passen, wird trotzdem versucht, die erste numerische Spalte als Preis und die erste Text-/Datumsspalte als Preisdatum zu interpretieren.</p>
+          <textarea id="sqlTemplate" class="mono">SELECT Price, PriceDate FROM security_prices WHERE SecurityID = {securityId} AND date(PriceDate) &lt;= date('{date}') ORDER BY PriceDate DESC LIMIT 1</textarea></div>
+        <p class="panel-note">Platzhalter <code>{securityId}</code> und <code>{date}</code> werden ersetzt. <code>date(PriceDate)</code> schneidet eine eventuell vorhandene Uhrzeit ab, sodass nur der Kalendertag verglichen wird; <code>ORDER BY PriceDate DESC</code> sortiert nach dem vollen Zeitstempel, liefert also — falls am gesuchten Tag mehrere Kurse erfasst sind — den letzten Preis dieses Tages. Ist an dem Tag kein Kurs vorhanden, wird auf den letzten verfügbaren Tag davor zurückgefallen. Spaltennamen (<code>Price</code>, <code>PriceDate</code>) entsprechen deinem <code>security_prices</code>-Schema.</p>
         <div class="field-row" style="grid-template-columns:auto 1fr;">
           <input type="checkbox" id="tursoRemember" style="width:auto;">
           <label for="tursoRemember" style="cursor:pointer;">Zugangsdaten in diesem Browser merken (localStorage)</label>
