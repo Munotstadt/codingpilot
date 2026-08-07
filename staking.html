@@ -450,10 +450,10 @@ function buildBookingRows(doc){
   const valuta = toDDMMYYYY(doc.datum);
   const amtChf = doc.calc.AmtCHF;
   const amtCry = doc.calc.AmtLC;
-  const base = {PartyNo: asset.mainId, Shop:'', Location:'', ProjectID: asset.projectId, Valuta: valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'WS_Buy'};
+  const base = {PartyNo: asset.mainId, Shop:'', Location:'', ProjectID: asset.projectId, Valuta: valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'OTH'};
   return [
-    Object.assign({}, base, {MainID:`WS income (taxable) ${suffix}`, AmtCHF:'-'+amtChf, Cry:'USD', AmtCry:'-'+amtCry}),
-    Object.assign({}, base, {MainID:`WS SQ Depot - Costs ${suffix}`, AmtCHF:amtChf, Cry:'USD', AmtCry:amtCry})
+    Object.assign({}, base, {MainID:`WS SQ Depot - Costs ${suffix}`, AmtCHF:amtChf, Cry:'USD', AmtCry:amtCry}),
+    Object.assign({}, base, {MainID:`WS income (taxable) ${suffix}`, AmtCHF:'-'+amtChf, Cry:'USD', AmtCry:'-'+amtCry})
   ];
 }
 document.getElementById('downloadBooking').addEventListener('click', ()=>{
