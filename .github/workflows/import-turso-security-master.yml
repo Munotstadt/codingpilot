@@ -1,0 +1,42 @@
+name: Import Turso Security Master
+
+on:
+  schedule:
+    # 03:15 UTC daily — kurz nach dem Preis-Import, Stammdaten ändern sich selten
+    - cron: '15 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Import security master from Turso
+        run: python scripts/import_turso_security_master.py
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Data/security_master.csv
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Import Turso security master ($(date -u +%Y-%m-%dT%H:%M))"
+            git push
+          fi
