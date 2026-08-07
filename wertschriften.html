@@ -396,7 +396,7 @@ function findSecurityMatch(isin, nameHint){
   }
   return null;
 }
-const RULE_COL_MAP = {broker:'Broker', owner:'AccountOwner', currency:'Currency', securityId:'SecurityID'};
+const RULE_COL_MAP = {broker:'Broker', owner:'AccountOwner', currency:'Currency', securityId:'SecurityID', custodyId:'CustodyID'};
 function findRule(type, criteria){
   return rules.find(r => {
     if(r.RuleType !== type) return false;
@@ -453,10 +453,10 @@ function resolveBankAccount(broker, owner, currency){
 function resolveFibuAccounts(doc){
   const f = doc.fields;
   const suffix = personSuffix(doc.custodyId);
-  const brokerAbbr = f.broker==='Swissquote' ? 'SQ' : (f.broker==='Raiffeisen' ? 'RB' : (f.broker||''));
+  const depotRule = findRule('FIBU_Depot', {custodyId: doc.custodyId});
   return {
     costsAccount: `Investment transaction costs ${suffix}`,
-    depotAccount: `WS ${brokerAbbr} Depot - Costs ${suffix}`,
+    depotAccount: depotRule ? depotRule.Value : '',
     transferAccount: `Admin & Transfer ${suffix}`,
     bankAccount: resolveBankAccount(f.broker, doc.owner, doc.securityCurrency)
   };
@@ -560,7 +560,10 @@ function renderAll(){
         <p class="subhead"><span class="step">3</span> FIBU-Konten</p>
         <div class="grid" data-role="fibugrid" style="${doc.fibu ? '' : 'display:none;'}">
           <div class="cell"><label>Kostenkonto</label><input type="text" data-role="fibuCosts" value="${(doc.fibu&&doc.fibu.costsAccount)||''}"></div>
-          <div class="cell"><label>Depotkonto</label><input type="text" data-role="fibuDepot" value="${(doc.fibu&&doc.fibu.depotAccount)||''}"></div>
+          <div class="cell learn"><label>Depotkonto</label>
+            <input type="text" data-role="fibuDepot" value="${(doc.fibu&&doc.fibu.depotAccount)||''}">
+            <div class="learnrow"><button class="ghost" data-role="learnDepot">Merken</button><span class="status" data-role="depotStatus"></span></div>
+          </div>
           <div class="cell"><label>Transferkonto</label><input type="text" data-role="fibuTransfer" value="${(doc.fibu&&doc.fibu.transferAccount)||''}"></div>
           <div class="cell learn"><label>Bankkonto</label>
             <input type="text" data-role="fibuBank" value="${(doc.fibu&&doc.fibu.bankAccount)||''}">
@@ -662,6 +665,15 @@ function renderAll(){
       statusEl.className='status'; statusEl.textContent='Speichere…';
       try{
         await commitRule('FIBUKonto', {broker: f.broker, owner: doc.owner, currency: doc.securityCurrency}, doc.fibu.bankAccount);
+        statusEl.className='status ok'; statusEl.textContent='✓ gemerkt';
+      } catch(e){ statusEl.className='status err'; statusEl.textContent='✗ '+e.message; }
+    });
+    stub.querySelector('[data-role="learnDepot"]').addEventListener('click', async ()=>{
+      const statusEl = stub.querySelector('[data-role="depotStatus"]');
+      if(!doc.custodyId || !doc.fibu || !doc.fibu.depotAccount){ statusEl.className='status err'; statusEl.textContent='Erst berechnen + Depotkonto ausfüllen'; return; }
+      statusEl.className='status'; statusEl.textContent='Speichere…';
+      try{
+        await commitRule('FIBU_Depot', {custodyId: doc.custodyId}, doc.fibu.depotAccount);
         statusEl.className='status ok'; statusEl.textContent='✓ gemerkt';
       } catch(e){ statusEl.className='status err'; statusEl.textContent='✗ '+e.message; }
     });
@@ -878,14 +890,14 @@ async function fetchFileAtPath(path){
   return {exists:true, sha:json.sha, content:b64DecodeUtf8(json.content)};
 }
 const RULES_PATH = 'Data/codingpilot_rules.csv';
-const RULES_COLUMNS = ['RuleType','Broker','AccountOwner','Currency','SecurityID','Value'];
+const RULES_COLUMNS = ['RuleType','Broker','AccountOwner','Currency','SecurityID','CustodyID','Value'];
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 async function commitRule(type, criteria, value){
   const maxAttempts = 3;
   for(let attempt = 1; attempt <= maxAttempts; attempt++){
     const existing = await fetchFileAtPath(RULES_PATH);
     let rows = existing.exists ? parseCsvText(existing.content) : [];
-    const newRow = {RuleType:type, Broker:'', AccountOwner:'', Currency:'', SecurityID:'', Value:value};
+    const newRow = {RuleType:type, Broker:'', AccountOwner:'', Currency:'', SecurityID:'', CustodyID:'', Value:value};
     Object.keys(criteria).forEach(k => { newRow[RULE_COL_MAP[k]] = criteria[k]; });
     const idx = rows.findIndex(r => r.RuleType===type && Object.keys(criteria).every(k => String(r[RULE_COL_MAP[k]]||'')===String(criteria[k]||'')));
     if(idx >= 0) rows[idx] = newRow; else rows.push(newRow);
@@ -973,7 +985,7 @@ function buildWsRow(doc){
     Price_CHF:'', Price_Cry:'', Price_LC:'',
     Comments: (brokerAbbr + ' ' + (f.referenz||'')).trim(),
     EntryNo: doc.entryNo,
-    Checkp1:'', Checkp2:'', Checkp3:'',
+    Checkp1:'PENDING', Checkp2:'', Checkp3:'',
     Source: 'CodingPilot_Wertschriften ' + APP_VERSION
   };
 }
