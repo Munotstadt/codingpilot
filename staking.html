@@ -442,23 +442,29 @@ document.getElementById('calcAll').addEventListener('click', async ()=>{
 });
 
 /* ================= Export 1: Buchungssätze (CSV, double-entry per transaction) ================= */
-const BOOKING_COLUMNS = ['MainID','PartyNo','Shop','Location','ProjectID','AmtCHF','Cry','AmtCry','Valuta','DateClearance','Comment','TrxArt'];
-function buildBookingRows(doc){
+const BOOKING_COLUMNS = ['EntryNo','DrMainID','CrMainID','Comments','PartyID','Shop','Location','ProjectID','TrxArt','AmtCHF','AmtLC','DateValuta','Booking'];
+function buildBookingRow(doc){
   const asset = ASSET_CONFIG[doc.asset];
-  if(!asset || !doc.calc || !doc.custody) return [];
+  if(!asset || !doc.calc || !doc.custody) return null;
   const suffix = personSuffix(doc.custody);
   const valuta = toDDMMYYYY(doc.datum);
-  const amtChf = doc.calc.AmtCHF;
-  const amtCry = doc.calc.AmtLC;
-  return [
-    {MainID:`WS income (taxable) ${suffix}`, PartyNo:'', Shop:'', Location:'', ProjectID:asset.projectId,
-     AmtCHF:'-'+amtChf, Cry:'USD', AmtCry:'-'+amtCry, Valuta:valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'OTH'},
-    {MainID:`WS SQ Depot - Costs ${suffix}`, PartyNo:'', Shop:'', Location:'', ProjectID:asset.projectId,
-     AmtCHF:amtChf, Cry:'USD', AmtCry:amtCry, Valuta:valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'OTH'}
-  ];
+  return {
+    EntryNo: asset.entryNoLabel + ' $$',
+    DrMainID: `WS SQ Depot - Costs ${suffix}`,
+    CrMainID: `WS income (taxable) ${suffix}`,
+    Comments: 'Staking Ertrag',
+    PartyID: asset.mainId,
+    Shop: '', Location: '',
+    ProjectID: asset.projectId,
+    TrxArt: 'WS_Buy',
+    AmtCHF: doc.calc.AmtCHF,
+    AmtLC: '',
+    DateValuta: valuta,
+    Booking: 'TRUE'
+  };
 }
 document.getElementById('downloadBooking').addEventListener('click', ()=>{
-  const rows = docs.flatMap(buildBookingRows);
+  const rows = docs.map(buildBookingRow).filter(Boolean);
   if(rows.length===0){ alert('Keine berechneten Transaktionen mit gewählter Verwahrung vorhanden.'); return; }
   const data = rows.map(r => { const o={}; BOOKING_COLUMNS.forEach(c=> o[c]=r[c]); return o; });
   const ws = XLSX.utils.json_to_sheet(data, {header: BOOKING_COLUMNS});
@@ -480,7 +486,7 @@ function buildWsRow(doc){
     AmtCHF: doc.calc.AmtCHF, AmtLC: doc.calc.AmtLC, ExpenseCHF:'0.00', ExpenseLC:'0.00',
     Price_CHF:'', Price_Cry:'', Price_LC:'',
     Comments: 'Staking SQ ' + (doc.referenz||''), EntryNo: asset.entryNoLabel,
-    CheckpointStatus:'Required', CheckpointStatusComment:'', CheckpointID:'', Source:'CodingPilot_Staking ' + APP_VERSION
+    CheckpointStatus:'PENDING', CheckpointStatusComment:'', CheckpointID:'', Source:'CodingPilot_Staking ' + APP_VERSION
   };
 }
 document.getElementById('downloadWs').addEventListener('click', ()=>{
