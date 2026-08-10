@@ -1,9 +1,9 @@
 SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
-10152,Amazon,,,
+10152,Amazon,,,CHF
 12007,S&P 500 Total Return,,,
-12161,Raiffeisen Anteilsschein,,,
+12161,Raiffeisen Anteilsschein,,,CHF
 22000,SOL - Solana,,,USD
-22213,Swiss Market Index (Total Return),,,
+22213,Swiss Market Index (Total Return),,,CHF
 31007,Rendite Bundesobligationen Eidgenossenschaft 10 Jahre (%),,,
 31008,STOXX Europe 600 EUR NR,,,
 31009,Raiffeisen Winterthur Hypothek 1 Jahr Zinssatz,,,
@@ -11,8 +11,8 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 31011,Raiffeisen Winterthur Hypothek 10 Jahr Zinssatz,,,
 31012,Raiffeisen Winterthur Hypothek 15 Jahr Zinssatz,,,
 31013,S&P 500 EQUAL WEIGHTED (NTR),,,
-31014,CBOE Interest Rate 10 Year T Note,,,
-274207,Brent Crude Oil Last Day Financ,,,
+31014,CBOE Interest Rate 10 Year T Note,,,CHF
+274207,Brent Crude Oil Last Day Financ,,,CHF
 274702,Gold (USD/oz),,,
 274720,Silver (USD/oz),,,
 275000,USD/CHF,,,CHF
@@ -23,16 +23,16 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 892400,MSCI ACWI - Emerging Markets (USD),,,
 897789,EUR/CHF,,,CHF
 908440,Apple Inc.,,,
-951692,Microsoft,,,
-994529,Nvidia,,,
+951692,Microsoft,,,CHF
+994529,Nvidia,,,CHF
 998089,Swiss Market Index (Price Index),,,
 998356,Nasdaq Composite,,,
 998750,Swiss Performance Index (Total Return),,,
 1384101,Lonza Group AG,,,
 1485278,Swiss Life,,,
-1600534,S&P 500 Equal Weight,,,
+1600534,S&P 500 Equal Weight,,,CHF
 2460882,Partners Group Holding AG,,,
-3246398,iShares Core MSCI Europe UCITS ETF EUR Dist,,,
+3246398,iShares Core MSCI Europe UCITS ETF EUR Dist,,,CHF
 3886335,Nestlé SA,3886335,CH0038863350	,CHF
 4778469,MSCI World,,,
 10192176,iShares MSCI EMU Small Cap ETF (CSEMUS),,,
@@ -41,26 +41,26 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 10737120,iShares Core MSCI Pacific ex Japan,,,
 10737489,iShares Core FTSE 100,,,
 10737587,iShares Core MSCI EMU UCITS ETF,,,
-11176253,UBS ETF (CH) SMIM,,,
-11195919,SWC (CH) REF Rsp Swiss Commercial FA CHF,,,
+11176253,UBS ETF (CH) SMIM,,,CHF
+11195919,SWC (CH) REF Rsp Swiss Commercial FA CHF,,,CHF
 14969376,SPDR S&P Euro Dividend Aristocrats ETF,,,
-18575508,Vanguard S&P 500 UCITS ETF,,,
+18575508,Vanguard S&P 500 UCITS ETF,,,CHF
 18789194,BTC - Bitcoin,,,USD
-21048333,Richemont SA,,,
+21048333,Richemont SA,,,CHF
 21413071,Constellium,,,USD
-21644750,Vonovia,,,
-23793563,iShares Swiss Dividends,,,
+21644750,Vonovia,,,CHF
+23793563,iShares Swiss Dividends,,,CHF
 24209517,iShares Core MSCI EM IMI UCITS ETF (EIMI),,,
-24476758,UBS Group AG,,,
-24514626,Xtrackers S&P 500 Equal Weight UCITS ETF (XDEW),,,
-26729122,Sunrise Communications AG,,,
-29798540,Alphabet (Google Class C),,,
+24476758,UBS Group AG,,,CHF
+24514626,Xtrackers S&P 500 Equal Weight UCITS ETF (XDEW),,,CHF
+26729122,Sunrise Communications AG,,,CHF
+29798540,Alphabet (Google Class C),,,CHF
 40149561,ETH - Ethereum,,,USD
 41125207,VanEck S&P Global Mining UCITS ETF (GDIG),,,
-41879292,Sika Ltd,,,
+41879292,Sika Ltd,,,CHF
 43249246,Alcon AG,,,CHF
 46664220,Helvetia Baloise Holding AG,,,
 114426952,Raiffeisen Futura II - Systematic Invest Equity B (Samantha),,,
 114426954,Raiffeisen Futura II - Systematic Invest Equity (Vorsorge),114426954,CH1144269540,
 152860278,Swiss Market Index (Equal Weight Total Return),,,
-156888148,SpaceX,,,
+156888148,SpaceX,,,CHF
