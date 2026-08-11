@@ -18,10 +18,10 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 275000,USD/CHF,,,CHF
 275001,GBP/CHF,,,CHF
 275018,JPY/CHF,,,
-281383,Gold Vreneli (CHF 20),,,
+281383,Gold Vreneli (CHF 20),281383,,CHF
 891800,MSCI Emerging Markets Index,,,
 892400,MSCI ACWI - Emerging Markets (USD),,,
-897789,EUR/CHF,,,CHF
+897789,EUR/CHF,897789,,CHF
 908440,Apple Inc.,,,
 951692,Microsoft,,,CHF
 994529,Nvidia,,,CHF
@@ -32,17 +32,18 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 1485278,Swiss Life,,,
 1600534,S&P 500 Equal Weight,,,CHF
 2460882,Partners Group Holding AG,,,
-3246398,iShares Core MSCI Europe UCITS ETF EUR Dist,,,CHF
+3025290,Swiss Leader Index (Total Return),,,CHF
+3246398,iShares Core MSCI Europe UCITS ETF EUR Dist,3246398,,EUR
 3886335,Nestlé SA,3886335,CH0038863350	,CHF
 4778469,MSCI World,,,
-10192176,iShares MSCI EMU Small Cap ETF (CSEMUS),,,
+10192176,iShares MSCI EMU Small Cap ETF (CSEMUS),10192176,,CHF
 10602719,UBS Gold ETF (AUUSI),10602719,CH0106027193,USD
 10608419,iShares Core MSCI Japan IMI UCITS ETF,,,
-10737120,iShares Core MSCI Pacific ex Japan,,,
+10737120,iShares Core MSCI Pacific ex Japan,,,USD
 10737489,iShares Core FTSE 100,,,
 10737587,iShares Core MSCI EMU UCITS ETF,,,
-11176253,UBS ETF (CH) SMIM,,,CHF
-11195919,SWC (CH) REF Rsp Swiss Commercial FA CHF,,,CHF
+11176253,UBS ETF (CH) SMIM,11176253,,CHF
+11195919,SWC (CH) REF Rsp Swiss Commercial FA CHF,11195919,,CHF
 14969376,SPDR S&P Euro Dividend Aristocrats ETF,,,
 18575508,Vanguard S&P 500 UCITS ETF,,,CHF
 18789194,BTC - Bitcoin,,,USD
@@ -50,17 +51,18 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 21413071,Constellium,,,USD
 21644750,Vonovia,,,CHF
 23793563,iShares Swiss Dividends,,,CHF
-24209517,iShares Core MSCI EM IMI UCITS ETF (EIMI),,,
+24209517,iShares Core MSCI EM IMI UCITS ETF (EIMI),24209517,,USD
 24476758,UBS Group AG,,,CHF
-24514626,Xtrackers S&P 500 Equal Weight UCITS ETF (XDEW),,,CHF
+24514626,Xtrackers S&P 500 Equal Weight UCITS ETF (XDEW),24514626,,CHF
 26729122,Sunrise Communications AG,,,CHF
 29798540,Alphabet (Google Class C),,,CHF
-40149561,ETH - Ethereum,,,USD
-41125207,VanEck S&P Global Mining UCITS ETF (GDIG),,,
+40149561,ETH - Ethereum,40149561,,USD
+41125207,VanEck S&P Global Mining UCITS ETF (GDIG),41125207,,CHF
 41879292,Sika Ltd,,,CHF
 43249246,Alcon AG,,,CHF
 46664220,Helvetia Baloise Holding AG,,,
-114426952,Raiffeisen Futura II - Systematic Invest Equity B (Samantha),,,
+114426952,Raiffeisen Futura II - Systematic Invest Equity B (Samantha),114426952,,CHF
 114426954,Raiffeisen Futura II - Systematic Invest Equity (Vorsorge),114426954,CH1144269540,
 152860278,Swiss Market Index (Equal Weight Total Return),,,
-156888148,SpaceX,,,CHF
+156888148,SpaceX,156888148,,CHF
+156888149,to be deleted,,,CHF
