@@ -1,6 +1,6 @@
 SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 10152,Amazon,,,USD
-12007,S&P 500 Total Return,,,USD
+12007,S&P 500 Total Return,,US78390M1053,USD
 12161,Raiffeisen Anteilsschein,,,CHF
 22000,SOL - Solana,,,USD
 22213,Swiss Market Index (Total Return),,,CHF
