@@ -115,12 +115,12 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 31004,ZWEX Land Zürcher Wohneigentumsindex,,,CHF
 31005,ZWEX Regio Zürcher Wohneigentumsindex,,,CHF
 31006,Pictet BVG Indizes 2015-60,,,CHF
-31007,Rendite Bundesobligationen Eidgenossenschaft 10 Jahre (%),,,
+31007,Rendite Bundesobligationen Eidgenossenschaft 10 Jahre (%),,,CHF
 31008,STOXX Europe 600 EUR NR,,,EUR
-31009,Raiffeisen Winterthur Hypothek 1 Jahr Zinssatz,,,
-31010,Raiffeisen Winterthur Hypothek 5 Jahr Zinssatz,,,
-31011,Raiffeisen Winterthur Hypothek 10 Jahr Zinssatz,,,
-31012,Raiffeisen Winterthur Hypothek 15 Jahr Zinssatz,,,
+31009,Raiffeisen Winterthur Hypothek 1 Jahr Zinssatz,,,CHF
+31010,Raiffeisen Winterthur Hypothek 5 Jahr Zinssatz,,,CHF
+31011,Raiffeisen Winterthur Hypothek 10 Jahr Zinssatz,,,CHF
+31012,Raiffeisen Winterthur Hypothek 15 Jahr Zinssatz,,,CHF
 31013,S&P 500 EQUAL WEIGHTED (NTR),,,USD
 31014,CBOE Interest Rate 10 Year Treasury Note,,,USD
 31050,ZKB Vorsorgevermögen,,,CHF
