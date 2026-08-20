@@ -49,12 +49,12 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 20029,DOST Architektur GmbH - Loan (04/24; 4.25%; B; 36),,34bf7307,CHF
 20030,OS Consulting GmbH - Loan (05/25; 4.5%; B+; 48),,d988883a,CHF
 20031,Ficiency GmbH - Loan (06/25; 5.25%; B; 48),,651b4036,CHF
-20032,RIAM AG - Loan (default),,9825df6d,CHF
+20032,RIAM AG - Loan 9825df6d (default),,9825df6d,CHF
 20033,Itema-Systems GmbH - Loan (12/2031),,71d9d297,CHF
 20034,EuropeanCar.ch SA - Loan (06/2024),,4743aa07,CHF
 20035,Creative Gastro Concept & Design AG - Loan (default),,c86318ab,CHF
 20036,Decofinder Wiser - Loan (06/2024),,6cdf7e1c,CHF
-20037,RIAM AG - Loan (default),,b4eb6db7,CHF
+20037,RIAM AG - Loan b4eb6db7 (default),,b4eb6db7,CHF
 20038,Axepta SA - Loan (07/2024),,b841a8be,CHF
 20039,Bavaria Swiss AG - Loan (08/2021),,725c2217,CHF
 20040,bedinBERN GmbH - Loan (08/2024),,9237f995,CHF
@@ -128,7 +128,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 31052,Raiffeisen Vorsorgevermögen PG,,,CHF
 31053,Terzo Vorsorgevermögen,,,CHF
 31054,Cornèr3 Vorsorgevermögen,,,CHF
-92920,UBS (Lux) Equity Fund - Australia,92920,LU0044681806,AUD
+92920,UBS (Lux) Equity Fund - Australia,92920,LU0044681806,CHF
 112937,Public Storage,112937,US74460D1090,USD
 123406,JSS Sustainable Equity - SaraSelect P CHF dist,123406,CH0001234068,CHF
 131964,Hammerson Plc,56462977,GB00BK7YQK64,GBP
@@ -157,7 +157,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 275642,OIS USD 1Y,110592050,GB0003766598,USD
 275667,CHF LIBOR 1M,275667,GB0003100228,CHF
 275672,CHF LIBOR 12M,275672,GB0003111993,CHF
-276935,"UBS (CH) Property Fund - Swiss Commercial ""Interswiss"" A",276935,CH0002769351,CHF
+276935,UBS (CH) Property Fund - Swiss Commercial ,276935,CH0002769351,CHF
 277010,Immo Helvetic,277010,CH0002770102,CHF
 278226,La Foncière Inc.,278226,CH0002782263,CHF
 278545,SOLVL 61,278545,CH0002785456,CHF
@@ -167,7 +167,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 279176,UBS (CH) Equity Fund - Switzerland Sustainable,279176,CH0002791769,CHF
 279181,UBS (CH) Equity Fund - Scandinavia,279181,,CHF
 279183,UBS (CH) Equity Fund - Global Titans,279183,,USD
-279330,Taiwan Semiconductor:Manufacturing Co. Ltd,279330,,USD
+279330,Taiwan Semiconductor Manufacturing Co. Ltd,279330,,USD
 281383,Gold Vreneli (CHF 20),281383,CH0002813837,CHF
 321130,ADLER Real Estate Ltd,321130,DE0005008007,EUR
 335229,Hamborner REIT Ltd.,59749334,DE0006013006,EUR
@@ -219,7 +219,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 883756,Allreal Holding AG,883756,CH0008837566,CHF
 889976,iShares SMI® ETF,889976,CH0008899764,CHF
 891800,MSCI Emerging Markets Index,,,USD
-892400,MSCI ACWI - Emerging Markets (USD),,,USD
+892400,MSCI ACWI (All Country World Index),,,USD
 897789,EUR/CHF,897789,,CHF
 908440,Apple Inc.,,,USD
 912499,Berkshire Hathaway:Inc A-Shares,912499,,USD
@@ -242,7 +242,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 998089,Swiss Market Index (Price Index),998089,CH0009980894,CHF
 998313,Dow Jones Industrial Average,998313,US2605661048,USD
 998356,Nasdaq Composite,998356,XC0009694271,USD
-998396,Hong Kong Stock Exchange Indices:Hang Seng,998396,HK0000004322,HKD
+998396,Hong Kong Stock Exchange Indices:Hang Seng,998396,HK0000004322,CHF
 998407,Nikkei 225,998407,JP9010C00002,JPY
 998434,S&P 500,998434,US78378X1072,USD
 998750,Swiss Performance Index (Total Return),998750,CH0009987501,CHF
@@ -280,11 +280,11 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 1221405,Holcim Ltd.,1221405,CH0012214059,CHF
 1222171,ABB Ltd.,1222171,CH0012221716,CHF
 1225515,The Swatch Group Ltd.,1225515,CH0012255151,CHF
-1235108,EURO STOXX Total Market Value,1235108,CH0012351083,EUR
+1235108,EURO STOXX Total Market Value (Net Return),1235108,CH0012351083,EUR
 1245057,GOAL SAP Vz. 19.25% -15.07.2002,1245057,,EUR
 1254978,Sonova,1254978,CH0012549785,CHF
 1273775,GAM Global Multi-Alpha - CHF Klasse,1273775,CH0012737752,CHF
-1291370,"UBS (CH) Property Fund - Swiss Residential ""Siat"" A",1291370,CH0012913700,CHF
+1291370,UBS (CH) Property Fund - Swiss Residential ,1291370,CH0012913700,CHF
 1302543,LO Funds - Swiss Franc Credit Bd (F) P A,1302543,LU0137076930,CHF
 1315622,CT (Lux) - European Smaller Companies 1E (EUR Accumulation),43195048,LU1864952335,EUR
 1318306,DPAM B - Real Estate Europe Sustainable B Cap,1318306,BE0058187841,EUR
@@ -341,7 +341,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 2200367,Engie Ltd,2200367,FR0010208488,EUR
 2226961,Schroder ISF  Global Property Securities A Acc,2226961,LU0224508324,USD
 2229080,Alstom Ltd.,2229080,FR0010220475,EUR
-2247650,UBS Vitainvest 50 World,2247650,CH0022476508,CHF
+2247650,UBS (CH) Vitainvest - World 50 Sustainable U Fonds,2247650,CH0022476508,CHF
 2270416,Janus Henderson Horizon Asia-Pacific Property Income Fund A2 USD,2270416,LU0229494975,USD
 2282206,Mastercard Inc.,2282206,,USD
 2308773,iShares MSCI World,2308773,IE00B0M62Q58,USD
@@ -421,7 +421,7 @@ SecurityID,SecurityName,ID_Valor,ID_ISIN,Currency
 4561479,ComStage STOXX ® Europe 600 Basic Resources NR UCITS ETF,4561479,LU0378435472,EUR
 4561610,ComStage STOXX ® Europe 600 Utilities NR UCITS ETF,4561610,LU0378437338,EUR
 4582551,Fundamenta Real Estate AG,4582551,CH0045825517,CHF
-4778469,MSCI World,169323,CH0001693230,USD
+4778469,MSCI World Index,169323,CH0001693230,USD
 4826551,Transocean Ltd,4826551,CH0048265513,CHF
 4862332,Pretium AG,4862332,,CHF
 4889034,Ballard Power Systems Inc.,4889034,,USD
