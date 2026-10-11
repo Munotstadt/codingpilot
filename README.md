@@ -1,149 +1,101 @@
 # Coding Pilot
 
-Browserbasierte Tools zur Beleg-Kontierung für Wertschriften-, Krypto- und Staking-Transaktionen. Belege werden vollständig lokal im Browser gelesen (PDF.js) — die PDF-Datei selbst verlässt den Browser nie, nur die daraus erfassten und geprüften Tabellenwerte werden übertragen.
+Kontierung von Staking- und Wertschriftenbelegen im Browser. Live unter **https://munot.app/codingpilot** (Google-Login über Cloudflare Access).
 
-**Live:** `index.html` als Einstiegspunkt (z.B. via GitHub Pages).
+Die Seiten lesen PDF-Belege nur im Browser (PDF.js). Weder die PDF-Datei noch daraus gelesene Werte gehen an Cloudflare oder GitHub. Das Backend bekommt genau zwei Arten von Anfragen:
 
----
+| Anfrage | Was übertragen wird |
+|---|---|
+| `GET /codingpilot/api/reference` | nichts (keine Parameter); liefert Stammdaten, Tageskurse und gelernte Regeln |
+| `POST /codingpilot/api/rules` | genau eine gelernte Zuordnung (RuleType, Schlüssel, Wert), wenn auf "Merken" geklickt wird |
 
-## Inhalt
-
-- [Überblick](#überblick)
-- [Seiten](#seiten)
-- [Datenfluss](#datenfluss)
-- [GitHub Actions](#github-actions)
-- [Datendateien](#datendateien-data)
-- [Gelernte Regeln](#gelernte-regeln-codingpilot_rulescsv)
-- [Setup](#setup)
-- [Versionierung](#versionierung)
-- [Bekannte Einschränkungen / offene Punkte](#bekannte-einschränkungen--offene-punkte)
-- [Dateistruktur](#dateistruktur)
-
----
-
-## Überblick
-
-Coding Pilot liest Transaktionsbelege (Swissquote, Raiffeisen) clientseitig aus, gleicht sie gegen Referenzdaten aus Turso ab (via GitHub als Zwischenspeicher, dazu unten mehr) und erzeugt Buchungsvorschläge als Excel-Export. Zwei funktionale Module:
-
-| Modul | Datei | Zweck |
-|---|---|---|
-| Staking | `staking.html` | ETH/SOL-Staking-Erträge: Netto-Gutschrift auslesen, Kurswert berechnen, Buchungsvorschlag |
-| Wertschriften | `wertschriften.html` | Kauf/Verkauf von Wertschriften & Krypto: Stammdaten-Abgleich, Mehrwährungsumrechnung, Buchungsvorschlag |
-
-Beide Module sind eigenständige, einzelne HTML-Dateien (kein Build-Prozess, kein Server nötig — direkt aus dem Repo oder via GitHub Pages nutzbar).
+Auch die Bibliotheken (PDF.js, SheetJS) liegen im Repo (`public/codingpilot/vendor/`) statt auf einem CDN.
 
 ## Seiten
 
-- **`index.html`** — Übersichtsseite mit Links zu allen Modulen und einer Kurzübersicht der Infrastruktur.
-- **`staking.html`** — Staking-Modul. Liest Crypto Asset, Transaktionsdatum, Netto-Quantity und Transaktionsnummer aus dem Beleg; berechnet `AmtLC`/`AmtCHF` anhand importierter Kurse; erzeugt `FIBUentries.xlsx` und `WSentries.xlsx`; benennt das PDF lokal um.
-- **`wertschriften.html`** — Wertschriften-Modul. Erkennt Swissquote-Börsentransaktionen (Kauf/Verkauf, Wertschriften & Krypto) sowie Raiffeisen-Zeichnungen; matched die Wertschrift gegen `security_master`; rechnet Handelswährung/Sicherheitswährung/CHF um; löst Konten (Kosten-, Depot-, Transfer-, Bankkonto) über gelernte Regeln auf; erzeugt `FIBUentries.xlsx` und `WSentries.xlsx`.
+- **Staking** (`/codingpilot/staking`): ETH/SOL-Staking-Belege auslesen, AmtLC/AmtCHF mit Tageskursen berechnen.
+- **Wertschriftentransaktionen** (`/codingpilot/wertschriften`): Kauf/Verkauf von Wertschriften & Krypto (Swissquote) und Raiffeisen-Zeichnungen. Abgleich mit `security_master`, Umrechnung zwischen Handels-, Sicherheitswährung und CHF, FIBU-Konten über gelernte Regeln.
 
-## Datenfluss
+Beide Seiten erzeugen eine Datei `entries_<Modul>_<Datum>.xlsx` mit den Tabs **FIBU** und **Securities** und benennen das PDF lokal nach einem festen Schema um.
 
-Der Kerngedanke: **Turso-Zugriffe passieren ausschließlich serverseitig** (in GitHub Actions), nie direkt aus dem Browser — das vermeidet CORS-Probleme vollständig, ohne einen Proxy zu benötigen.
-
-```
-Turso (security_prices, security_master)
-        │  (GitHub Actions, 1–2×/Tag, serverseitig)
-        ▼
-Data/security_prices_recent.csv
-Data/security_master.csv
-        │  (fetch von raw.githubusercontent.com, CORS-frei)
-        ▼
-staking.html / wertschriften.html  (Browser)
-        │  (PDF-Belege werden hier lokal geparst)
-        ▼
-FIBUentries.xlsx / WSentries.xlsx  (lokaler Download)
-        │
-        ▼
-Externes Buchhaltungstool (manueller Import)
-```
-
-Zusätzlich schreiben beide Module bei Bedarf **gelernte Kontenzuordnungen** direkt über die GitHub-Contents-API zurück nach `Data/codingpilot_rules.csv` (dafür ist ein Personal Access Token im Browser nötig, siehe [Setup](#setup)).
-
-## GitHub Actions
-
-| Workflow | Datei | Zeitplan | Schreibt |
-|---|---|---|---|
-| Import Turso Security Prices | `.github/workflows/import-turso-security-prices.yml` | 03:00 & 15:00 UTC täglich | `Data/security_prices_recent.csv` |
-| Import Turso Security Master | `.github/workflows/import-turso-security-master.yml` | 03:15 UTC täglich | `Data/security_master.csv` |
-
-Zugehörige Skripte: `scripts/import_turso_security_prices.py`, `scripts/import_turso_security_master.py` (Python, nutzen die Turso HTTP-API `/v2/pipeline`).
-
-Beide Workflows sind zusätzlich manuell auslösbar (`workflow_dispatch`) über den Actions-Tab — sinnvoll für den ersten Lauf oder nach Schema-Änderungen.
-
-**Preise:** Die letzten 90 Tage für SecurityIDs `40149561` (ETH), `22000` (SOL), `275000` (USD/CHF), `897789` (EUR/CHF). Weitere Securities lassen sich in `import_turso_security_prices.py` (Liste `SECURITY_IDS`) ergänzen.
-
-**Stammdaten:** Alle Zeilen aus `security_master` (`SecurityID, SecurityName, ID_Valor, ID_ISIN, Currency`).
-
-## Datendateien (`Data/`)
-
-| Datei | Herkunft | Inhalt |
-|---|---|---|
-| `security_prices_recent.csv` | Action (automatisch) | `SecurityID, PriceDate, Price` — Kurshistorie, letzte 90 Tage |
-| `security_master.csv` | Action (automatisch) | `SecurityID, SecurityName, ID_Valor, ID_ISIN, Currency` — Wertschriften-Stammdaten |
-| `codingpilot_rules.csv` | App (bei "Merken"-Klick) | Generische gelernte Zuordnungen, siehe unten |
-
-## Gelernte Regeln (`codingpilot_rules.csv`)
-
-Statt für jede Zuordnungsart eine eigene Tabelle zu pflegen, läuft alles über eine generische Struktur:
+## Architektur
 
 ```
-RuleType, Broker, AccountOwner, Currency, SecurityID, CustodyID, Value
+Browser (Google-Login via Cloudflare Access)
+   │
+   └── munot.app/codingpilot*        Worker "codingpilot" (dieses Repo)
+         ├── public/codingpilot/     statische Seiten (Workers Static Assets)
+         ├── /api/reference  ──────► D1 "securities"  (security_master, security_prices; nur lesend)
+         │                   ──────► D1 "codingpilot" (codingpilot_rules)
+         └── /api/rules      ──────► D1 "codingpilot" (codingpilot_rules)
 ```
 
-Ein `RuleType` definiert, welche Spalten als Schlüssel dienen; nicht benötigte Schlüsselspalten bleiben leer.
+GitHub dient nur noch dem Deployment: Cloudflare Workers Builds deployt bei jedem Push auf `main`. Es gibt keine GitHub Actions, keine CSV-Dateien im Repo und keinen Turso-Zugriff mehr.
+
+### Worker (`src/index.js`)
+
+- `/codingpilot` und `/codingpilot/` → Redirect auf die Wertschriften-Seite
+- `GET /codingpilot/api/reference` → `{ user, priceIds, master, prices, rules }`
+  - `prices`: pro Security und Kalendertag der letzte Kurs, letzte 730 Tage, für ETH (40149561), SOL (22000), USD/CHF (275000) und EUR/CHF (897789). Anpassen über `PRICE_IDS` / `PRICE_DAYS_BACK`.
+- `POST /codingpilot/api/rules` → Regel speichern (Upsert). Nur same-origin; Schlüsselspalten werden pro RuleType geprüft.
+
+Alle `/api/`-Routen verlangen ein Cloudflare-Access-Token. Sind `ACCESS_TEAM_DOMAIN` und `ACCESS_AUD` gesetzt, prüft der Worker das JWT vollständig (Signatur, Audience, Ablauf). workers.dev- und Preview-URLs sind deaktiviert.
+
+### Gelernte Regeln (`codingpilot_rules`)
+
+Generische Struktur `RuleType, Broker, AccountOwner, Currency, SecurityID, CustodyID, Value`; ein RuleType legt fest, welche Spalten Schlüssel sind:
 
 | RuleType | Schlüssel | Beispiel-Value |
 |---|---|---|
 | `CustodyID` | Broker + AccountOwner | `SQ PG` |
 | `ProjectID` | SecurityID | `INV_Solana_2025 ff.` |
-| `EntryNo` | SecurityID | `SOL - Solana - Staking` |
-| `FIBUKonto` | Broker + AccountOwner + Currency | `SQ WS USD PG (#315)` (Bankkonto) |
+| `EntryNo` | SecurityID | `SOL - Solana - Transactions` |
+| `FIBUKonto` | Broker + AccountOwner + Currency | `SQ WS USD PG (#315)` |
 | `FIBU_Depot` | CustodyID | `WS SQ Depot - Costs PG` |
 
-Sechs Swissquote-Bankkonten (Philipp/Vero × CHF/EUR/USD) sind als Startbelegung fest im Code hinterlegt (`FIBU_BANK_DEFAULTS` in `wertschriften.html`) und werden von einer gelernten Regel automatisch überschrieben, sobald eine existiert. Alle anderen Zuordnungen (insbesondere Raiffeisen, Samantha) müssen einmalig manuell eingetragen und über den jeweiligen "Merken"-Button gespeichert werden — danach werden sie für alle künftigen Belege automatisch vorgeschlagen.
+Die sechs Swissquote-Bankkonten sind als Startbelegung im Code (`FIBU_BANK_DEFAULTS` in `wertschriften.html`) und werden von einer gelernten Regel überschrieben. Schema: `schema/d1_schema.sql`. Jede Zeile speichert zusätzlich, wer sie wann zuletzt geändert hat (`updated_by`, `updated_at`).
 
-Schreibzugriffe verwenden eine Retry-Logik (bis zu 3 Versuche mit kurzem Backoff), um gelegentliche HTTP-409-Konflikte der GitHub-API bei schnell aufeinanderfolgenden Speichervorgängen abzufangen.
+## Setup (einmalig)
 
-## Setup
+1. **D1 `codingpilot`**: ist angelegt (`bed9ee45-…`), Tabelle und die 24 bisherigen Regeln aus `Data/codingpilot_rules.csv` sind übernommen.
+2. **Worker verbinden**: Cloudflare Dashboard → Workers & Pages → Create → *Import a repository* → `Munotstadt/codingpilot`, Root-Verzeichnis `/`. Der Name muss `codingpilot` sein (wie in `wrangler.jsonc`).
+3. **Route**: `wrangler.jsonc` legt die Route `munot.app/codingpilot*` an. Dafür braucht die Zone `munot.app` einen proxied DNS-Eintrag für die Apex-Domain `munot.app` (orange Wolke).
+4. **Cloudflare Access**: Zero Trust → Access → Applications → *Self-hosted*, Public Hostname `munot.app`, Pfad `codingpilot`. Identity Provider Google, Policy z. B. feste E-Mail-Liste (wie bei energy.munot.app).
+5. **JWT-Prüfung** (empfohlen): im Worker unter Settings → Variables and Secrets setzen:
+   - `ACCESS_TEAM_DOMAIN`: z. B. `<team>.cloudflareaccess.com`
+   - `ACCESS_AUD`: "Application Audience (AUD) Tag" der Access-Application aus Schritt 4
 
-1. **Repo-Secrets** (Settings → Secrets and variables → Actions):
-   - `TURSO_DATABASE_URL`
-   - `TURSO_AUTH_TOKEN`
-2. Beide Import-Workflows einmal manuell auslösen (Actions-Tab → *Run workflow*), damit `Data/security_prices_recent.csv` und `Data/security_master.csv` initial entstehen.
-3. In `staking.html` / `wertschriften.html`: falls die Referenzdaten nicht automatisch laden, im Abschnitt "Referenzdaten-Import" die URLs prüfen (Standard: `raw.githubusercontent.com/<owner>/<repo>/main/Data/...`).
-4. Für das Speichern gelernter Zuordnungen (`wertschriften.html`, Abschnitt "GitHub-Zugang"): ein Personal Access Token mit **Contents: Read & Write** auf dieses Repo eintragen. Nur nötig für "Merken"-Klicks, nicht fürs reine Lesen der Referenzdaten.
-5. Optional: Token im Browser merken (Checkbox) — funktioniert nur außerhalb von Sandbox-/Vorschau-Umgebungen, die `localStorage` blockieren; auf einer regulär gehosteten Seite (z.B. GitHub Pages) normal nutzbar.
+   `keep_vars` in `wrangler.jsonc` sorgt dafür, dass Deploys diese Werte nicht überschreiben.
+
+## Lokal testen
+
+```bash
+npx wrangler d1 execute codingpilot --local --file schema/d1_schema.sql
+npx wrangler dev --local
+```
+
+Die lokale D1 `securities` braucht `security_master` und `security_prices` mit Testdaten. Die API-Routen erwarten den Header `Cf-Access-Jwt-Assertion` (lokal ohne gesetzte Access-Vars reicht ein beliebiger Wert).
 
 ## Versionierung
 
-Jede Seite zeigt unten in der Fußzeile ihre Version, z.B. `V3 - 07.08.2026`. Konvention: Version wird an jedem Tag, an dem Anpassungen vorgenommen werden, um eins erhöht (Konstante `APP_VERSION` am Anfang des jeweiligen `<script>`-Blocks). Der Wert fließt auch in die `Source`-Spalte der WSentries-Exporte ein (`CodingPilot_Staking Vx - DD.MM.YYYY` bzw. `CodingPilot_Wertschriften Vx - DD.MM.YYYY`).
+`APP_VERSION` in `public/codingpilot/common.js` wird an jedem Tag mit Anpassungen um eins erhöht. Sie steht in der Fusszeile und in der `Source`-Spalte des Securities-Tabs. Aktuell: **V2 - 11.10.2026**.
 
-Aktueller Stand (bei Erstellung dieser README): **V1 - 07.08.2026** auf beiden Modulen.
+## Bekannte Einschränkungen
 
-## Bekannte Einschränkungen / offene Punkte
-
-- **Distributions-Modul** (Dividenden/Ausschüttungen) ist auf der Startseite als "geplant" markiert, aber noch nicht gebaut.
-- **PDF-Umbenennung** ist nur in beiden aktiven Modulen implementiert; das Namensschema unterscheidet sich je Modul (Staking: `YYYYMMDD_{ETH|SOL}_Kauf_SQ_{Referenz}.pdf`; Wertschriften: `YYYYMMDD_VN_{ID_Valor}_{Buy|Sell}_({Cry}_{AmtLC})_{SQ|RB}_{Referenz}.pdf`).
-- **Concurrency:** Die gelernten Regeln werden nur im Arbeitsspeicher der jeweiligen Browser-Session gecached; bei gleichzeitiger Nutzung durch mehrere Personen gilt "letzter Schreibvorgang gewinnt" (kein Merge).
-- **Krypto-Matching:** Ohne ISIN läuft der Stammdaten-Abgleich über einen Fuzzy-Namens-Vergleich (Ticker gegen `SecurityName`) — bei mehrdeutigen Namen ggf. manuell korrigieren.
+- **Krypto-Matching:** Ohne ISIN läuft der Stammdaten-Abgleich über einen ungefähren Namensvergleich (Ticker gegen `SecurityName`). Bei mehrdeutigen Namen manuell korrigieren.
+- **Kurse:** Die Seiten verwenden den letzten Tageskurs am oder vor dem Transaktionsdatum (bis 730 Tage zurück).
 
 ## Dateistruktur
 
 ```
 codingpilot/
-├── index.html
-├── staking.html
-├── wertschriften.html
-├── scripts/
-│   ├── import_turso_security_prices.py
-│   └── import_turso_security_master.py
-├── .github/workflows/
-│   ├── import-turso-security-prices.yml
-│   └── import-turso-security-master.yml
-└── Data/
-    ├── security_prices_recent.csv   (automatisch, nicht manuell bearbeiten)
-    ├── security_master.csv          (automatisch, nicht manuell bearbeiten)
-    └── codingpilot_rules.csv        (von den Apps gepflegt, manuell korrigierbar)
+├── wrangler.jsonc
+├── src/index.js                 Worker (API + Routing)
+├── schema/d1_schema.sql         D1 "codingpilot"
+└── public/codingpilot/
+    ├── staking.html
+    ├── wertschriften.html
+    ├── app.css                  Layout analog energy.munot.app
+    ├── common.js                PDF lesen, Referenzdaten, Regeln, Excel-Export
+    └── vendor/                  PDF.js 3.11.174, SheetJS 0.18.5
 ```
