@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munotstadt Coding Pilot · Staking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Munotstadt <span>Coding Pilot</span></div>
+  <div class="nav-right">
+    <div class="nav-links">
+      <a href="staking" class="nav-link active">Staking</a>
+      <a href="wertschriften" class="nav-link">Wertschriftentransaktionen</a>
+    </div>
+    <span class="user" id="userEmail"></span>
+    <a href="/cdn-cgi/access/logout" class="logout-link">Logout</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <h1>Staking</h1>
+  <div class="sub"><span class="privacy-dot"></span>ETH/SOL-Staking-Belege lokal auslesen, AmtLC/AmtCHF berechnen und Buchungsvorschlag erzeugen. PDFs und Belegdaten verlassen den Browser nie.</div>
+
+  <h2>Belege hochladen</h2>
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="PDF-Dateien auswählen oder hierher ziehen">
+    <strong>PDFs hierher ziehen oder klicken zum Auswählen</strong>
+    <span>Erwartet: Swissquote-Belohnung/Staking-Belege für ETH oder SOL</span>
+    <input type="file" id="fileInput" accept="application/pdf" multiple>
+  </div>
+
+  <h2>Referenzdaten <span class="hint">Kurse ETH/USD, SOL/USD, USD/CHF aus D1 securities</span></h2>
+  <div class="card ref-bar">
+    <span class="status" id="refStatus"></span>
+    <button class="secondary" id="reloadRef">Neu laden</button>
+  </div>
+
+  <h2>Belege &amp; Berechnung <span class="hint" id="resultCount"></span></h2>
+  <div id="results"><div class="empty-state" id="emptyState">Noch keine Belege hochgeladen.</div></div>
+
+  <div class="bulk" id="bulkFooter" style="display:none;">
+    <span class="count" id="bulkCount"></span>
+    <div class="btn-row">
+      <button class="secondary" id="calcAll">Alle berechnen</button>
+      <button class="accent" id="downloadEntries">entries.xlsx herunterladen</button>
+    </div>
+  </div>
+
+  <div class="footer" id="appVersion"></div>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="common.js"></script>
+<script>
+let docs = []; // {id, name, arrayBuffer, asset, datum, quantity, referenz, custody, hinweis, calc, status}
+let seq = 0;
+const KNOWN_ASSETS = ['ETH','SOL'];
+
+/* ProjectID/EntryNo-Schreibweisen exakt wie im Buchhaltungssystem (inkl. "Etherum"). */
+const ASSET_CONFIG = {
+  ETH: { mainId: 'ETH - Ethereum', projectId: 'INV_Etherum_2024 ff.', entryNoLabel: 'ETH - Etherum - Staking' },
+  SOL: { mainId: 'SOL - Solana',   projectId: 'INV_Solana_2025 ff.',  entryNoLabel: 'SOL - Solana - Staking' }
+};
+
+function suggestCustodySQ(text){
+  if(/Philipp/i.test(text)) return 'SQ PG';
+  if(/Ver[oó]nica/i.test(text)) return 'SQ VP';
+  return '';
+}
+function buildFilenameStaking(doc){
+  const dateCompact = (doc.datum||'').replace(/-/g,'') || 'YYYYMMDD';
+  return `${dateCompact}_${doc.asset || 'X'}_Kauf_SQ_${doc.referenz || ''}.pdf`;
+}
+
+/* ================= Parser ================= */
+function parseStaking(t){
+  const out = {asset:'', datum:'', quantity:'', referenz:'', custody:'', hinweis:''};
+  out.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t) || grab(/Our reference\s*:\s*(\d+)/i, t);
+  out.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  out.custody = suggestCustodySQ(t);
+  const qm = t.match(/Anzahl\s+Währung\s+([\d.,']+)\s+([A-Z]{2,5})/i);
+  if(qm){ out.quantity = qm[1]; out.asset = qm[2].toUpperCase(); }
+  if(!out.quantity){
+    // Fallback: Zeile "Total <CCY> <Betrag>" (Netto-Gutschrift bei Belohnungs-Belegen)
+    const tm = t.match(/Total\s+([A-Z]{2,5})\s+([\d.,']+)/i);
+    if(tm){ out.asset = out.asset || tm[1].toUpperCase(); out.quantity = tm[2]; }
+  }
+  if(!out.asset || !KNOWN_ASSETS.includes(out.asset)){
+    out.hinweis = out.asset ? ('Asset "'+out.asset+'" ist nicht ETH/SOL — bitte prüfen') : 'Asset konnte nicht erkannt werden — bitte prüfen';
+  }
+  if(!out.datum || !out.quantity || !out.referenz){
+    out.hinweis = (out.hinweis ? out.hinweis + ' · ' : '') + 'Nicht alle Pflichtfelder gefunden — bitte ergänzen';
+  }
+  return out;
+}
+
+/* ================= Rendering ================= */
+function updateBulkCount(){
+  document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet · ' + docs.filter(d=>d.calc && d.custody).length + ' exportbereit';
+}
+function renderAll(){
+  const container = document.getElementById('results');
+  const empty = document.getElementById('emptyState');
+  container.innerHTML = '';
+  if(docs.length === 0){
+    container.appendChild(empty);
+    document.getElementById('resultCount').textContent = '';
+    document.getElementById('bulkFooter').style.display = 'none';
+    return;
+  }
+  document.getElementById('resultCount').textContent = docs.length + ' Beleg(e)';
+  document.getElementById('bulkFooter').style.display = 'flex';
+  updateBulkCount();
+
+  docs.forEach(doc => {
+    const stub = document.createElement('div');
+    stub.className = 'stub staking';
+    doc.el = stub;
+    stub.innerHTML = `
+      <div class="stub-head">
+        <div class="stub-head-left">
+          <span class="badge ${KNOWN_ASSETS.includes(doc.asset) ? 'staking' : 'warn'}">${esc(doc.asset || 'Unbekannt')} · Staking</span>
+          <span class="filename">${esc(doc.name)}</span>
+        </div>
+        ${doc.hinweis ? '<span class="warn-text">⚠ ' + esc(doc.hinweis) + '</span>' : ''}
+      </div>
+      <div class="stub-body">
+        <div class="grid">
+          <div class="cell"><label>Crypto Asset</label>
+            <select data-role="asset">
+              <option value="ETH" ${doc.asset==='ETH'?'selected':''}>ETH</option>
+              <option value="SOL" ${doc.asset==='SOL'?'selected':''}>SOL</option>
+            </select>
+          </div>
+          <div class="cell"><label>Transaktionsdatum</label><input type="date" data-role="datum" value="${esc(doc.datum)}"></div>
+          <div class="cell"><label>Quantity (Netto Gutschrift)</label><input type="text" data-role="quantity" value="${esc(doc.quantity)}"></div>
+          <div class="cell"><label>Transaktionsnummer</label><input type="text" data-role="referenz" value="${esc(doc.referenz)}"></div>
+          <div class="cell"><label>Verwahrung</label>
+            <select data-role="custody">
+              <option value="">— wählen —</option>
+              <option value="SQ PG" ${doc.custody==='SQ PG'?'selected':''}>SQ PG</option>
+              <option value="SQ VP" ${doc.custody==='SQ VP'?'selected':''}>SQ VP</option>
+            </select>
+          </div>
+        </div>
+        <div class="calc-panel" data-role="calcpanel" style="display:none;"></div>
+      </div>
+      <div class="stub-foot">
+        <span class="status" data-role="status">${esc(doc.status)}</span>
+        <div class="foot-actions">
+          <button class="secondary" data-role="download">PDF umbenennen &amp; herunterladen</button>
+          <button class="accent" data-role="calc">Berechnen</button>
+          <button class="danger" data-role="delete">Löschen</button>
+        </div>
+      </div>
+    `;
+    const q = (role) => stub.querySelector(`[data-role="${role}"]`);
+    q('asset').addEventListener('change', e => doc.asset = e.target.value);
+    q('datum').addEventListener('input', e => doc.datum = e.target.value);
+    q('quantity').addEventListener('input', e => doc.quantity = e.target.value);
+    q('referenz').addEventListener('input', e => doc.referenz = e.target.value);
+    q('custody').addEventListener('change', e => { doc.custody = e.target.value; updateBulkCount(); });
+    q('download').addEventListener('click', ()=> downloadRenamedPdfBuffer(doc.arrayBuffer, buildFilenameStaking(doc)));
+    q('calc').addEventListener('click', ()=> calcOne(doc));
+    q('delete').addEventListener('click', ()=>{ docs = docs.filter(d => d.id !== doc.id); renderAll(); });
+    renderCalcPanel(doc);
+    container.appendChild(stub);
+  });
+}
+function renderCalcPanel(doc){
+  const panel = doc.el.querySelector('[data-role="calcpanel"]');
+  if(!doc.calc){ panel.style.display='none'; panel.innerHTML=''; return; }
+  const c = doc.calc;
+  panel.style.display = '';
+  panel.innerHTML = `
+    <div class="calc-row"><span class="k">${esc(doc.asset)}/USD am ${esc(c.cryptoPriceDate)}</span><span class="v">${c.cryptoPrice}</span></div>
+    <div class="calc-row"><span class="k">USD/CHF am ${esc(c.fxPriceDate)}</span><span class="v">${c.fxPrice}</span></div>
+    <div class="calc-row result"><span class="k">AmtLC = Quantity × ${esc(doc.asset)}-Preis</span><span class="v">${c.AmtLC} USD</span></div>
+    <div class="calc-row result"><span class="k">AmtCHF = AmtLC × USD/CHF</span><span class="v">${c.AmtCHF} CHF</span></div>
+  `;
+}
+
+/* ================= Datei-Eingang (nur lokal) ================= */
+async function handleFiles(fileList){
+  if(Ref.prices.length === 0) await loadReference(document.getElementById('refStatus'));
+  for(const file of fileList){
+    if(!isPdf(file)) continue;
+    const buf = await file.arrayBuffer();
+    let parsed = {asset:'',datum:'',quantity:'',referenz:'',custody:'',hinweis:'PDF konnte nicht gelesen werden'};
+    try{ parsed = parseStaking(await extractPdfText(buf)); } catch(e){}
+    docs.push(Object.assign({id: ++seq, name: file.name, arrayBuffer: buf, calc: null, status: ''}, parsed));
+  }
+  renderAll();
+}
+initDropzone(handleFiles);
+
+/* ================= Berechnung ================= */
+function calcOne(doc){
+  const statusEl = doc.el.querySelector('[data-role="status"]');
+  if(!KNOWN_ASSETS.includes(doc.asset)) return setStatus(statusEl, 'err', '✗ Asset muss ETH oder SOL sein');
+  if(!doc.datum) return setStatus(statusEl, 'err', '✗ Transaktionsdatum fehlt');
+  const qty = parseSwissNumber(doc.quantity);
+  if(qty === null) return setStatus(statusEl, 'err', '✗ Quantity ist keine gültige Zahl');
+  if(Ref.prices.length === 0) return setStatus(statusEl, 'err', '✗ Kursdaten nicht geladen — "Neu laden" klicken');
+  const cryptoRow = lookupPrice(doc.asset === 'ETH' ? Ref.priceIds.ETH : Ref.priceIds.SOL, doc.datum);
+  const fxRow = lookupPrice(Ref.priceIds.USDCHF, doc.datum);
+  if(!cryptoRow || isNaN(cryptoRow.price)) return setStatus(statusEl, 'err', '✗ '+doc.asset+'-Preis für '+doc.datum+' nicht gefunden');
+  if(!fxRow || isNaN(fxRow.price)) return setStatus(statusEl, 'err', '✗ USD/CHF-Kurs für '+doc.datum+' nicht gefunden');
+  const amtLC = roundTo2(qty * cryptoRow.price);
+  const amtCHF = roundTo2(amtLC * fxRow.price);
+  doc.calc = {
+    cryptoPrice: cryptoRow.price, cryptoPriceDate: cryptoRow.date,
+    fxPrice: fxRow.price, fxPriceDate: fxRow.date,
+    AmtLC: amtLC.toFixed(2), AmtCHF: amtCHF.toFixed(2)
+  };
+  setStatus(statusEl, 'ok', '✓ Berechnet · '+new Date().toLocaleTimeString('de-CH'));
+  renderCalcPanel(doc);
+  updateBulkCount();
+}
+document.getElementById('calcAll').addEventListener('click', ()=> docs.forEach(calcOne));
+
+/* ================= Export: entries.xlsx (Tabs FIBU + Securities) ================= */
+const FIBU_COLUMNS = ['MainID','PartyNo','Shop','Location','ProjectID','AmtCHF','Cry','AmtCry','Valuta','DateClearance','Comment','TrxArt'];
+function buildFibuRows(doc){
+  const asset = ASSET_CONFIG[doc.asset];
+  if(!asset || !doc.calc || !doc.custody) return [];
+  const suffix = personSuffix(doc.custody);
+  const valuta = toDDMMYYYY(doc.datum);
+  const amtChf = doc.calc.AmtCHF;
+  const amtCry = doc.calc.AmtLC;
+  const base = {PartyNo: asset.mainId, Shop:'', Location:'', ProjectID: asset.projectId, Valuta: valuta, DateClearance:'', Comment:'Staking Ertrag', TrxArt:'OTH'};
+  return [
+    Object.assign({}, base, {MainID:`WS SQ Depot - Costs ${suffix}`, AmtCHF:amtChf, Cry:'USD', AmtCry:amtCry}),
+    Object.assign({}, base, {MainID:`WS income (taxable) ${suffix}`, AmtCHF:'-'+amtChf, Cry:'USD', AmtCry:'-'+amtCry})
+  ];
+}
+const WS_COLUMNS = ['MainID','CustodyID','ProjectID','TrxTypeID','Date','Valuta','Quantity','Cry','AmtCHF','AmtLC',
+  'ExpenseCHF','ExpenseLC','Price_CHF','Price_Cry','Price_LC','Comments','EntryNo','CheckpointStatus','CheckpointStatusComment','CheckpointID','Source'];
+function buildWsRow(doc){
+  const asset = ASSET_CONFIG[doc.asset];
+  if(!asset || !doc.calc || !doc.custody) return null;
+  const valuta = toDDMMYYYY(doc.datum);
+  return {
+    MainID: asset.mainId, CustodyID: doc.custody, ProjectID: asset.projectId, TrxTypeID:'Buy',
+    Date: valuta, Valuta: valuta, Quantity: doc.quantity, Cry:'USD',
+    AmtCHF: doc.calc.AmtCHF, AmtLC: doc.calc.AmtLC, ExpenseCHF:'0.00', ExpenseLC:'0.00',
+    Price_CHF:'', Price_Cry:'', Price_LC:'',
+    Comments: 'Staking SQ ' + (doc.referenz||''), EntryNo: asset.entryNoLabel,
+    CheckpointStatus:'PENDING', CheckpointStatusComment:'', CheckpointID:'', Source:'CodingPilot_Staking ' + APP_VERSION
+  };
+}
+document.getElementById('downloadEntries').addEventListener('click', ()=>{
+  const fibuRows = docs.flatMap(buildFibuRows);
+  const wsRows = docs.map(buildWsRow).filter(Boolean);
+  if(wsRows.length===0){ alert('Keine berechneten Transaktionen mit gewählter Verwahrung vorhanden.'); return; }
+  exportEntries('entries_Staking_' + todayISO() + '.xlsx', FIBU_COLUMNS, fibuRows, WS_COLUMNS, wsRows);
+});
+
+loadReference(document.getElementById('refStatus'));
+</script>
+</body>
+</html>

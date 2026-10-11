@@ -1,0 +1,39 @@
+{
+  "name": "codingpilot",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+
+  // Nur über munot.app/codingpilot erreichbar (dort sitzt Cloudflare Access davor).
+  // workers.dev- und Preview-URLs sind deaktiviert, damit es keinen Weg am Login vorbei gibt.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [
+    { "pattern": "munot.app/codingpilot*", "zone_name": "munot.app" }
+  ],
+
+  // Statische Seiten. Liegen unter public/codingpilot/, damit der Pfad
+  // munot.app/codingpilot/staking.html direkt auf die Datei passt.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  "d1_databases": [
+    // Bestehende DB: security_master + security_prices (nur lesend)
+    {
+      "binding": "DB_SECURITIES",
+      "database_name": "securities",
+      "database_id": "07edce2c-f7e2-48a5-a219-e48005579333"
+    },
+    // Gelernte Zuordnungen (codingpilot_rules), Schema in schema/d1_schema.sql
+    {
+      "binding": "DB",
+      "database_name": "codingpilot",
+      "database_id": "bed9ee45-d00f-4068-aa15-53440a1f715b"
+    }
+  ],
+
+  // ACCESS_TEAM_DOMAIN und ACCESS_AUD werden im Dashboard gesetzt
+  // (Settings → Variables and Secrets) und bei Deploys nicht überschrieben.
+  "keep_vars": true
+}

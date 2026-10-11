@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Munotstadt Coding Pilot · Wertschriftentransaktionen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Munotstadt <span>Coding Pilot</span></div>
+  <div class="nav-right">
+    <div class="nav-links">
+      <a href="staking" class="nav-link">Staking</a>
+      <a href="wertschriften" class="nav-link active">Wertschriftentransaktionen</a>
+    </div>
+    <span class="user" id="userEmail"></span>
+    <a href="/cdn-cgi/access/logout" class="logout-link">Logout</a>
+  </div>
+</header>
+
+<div class="wrap">
+  <h1>Wertschriftentransaktionen</h1>
+  <div class="sub"><span class="privacy-dot"></span>Kauf-/Verkaufsbelege lokal auslesen, mit den Stammdaten abgleichen, in Handels-/Sicherheitswährung und CHF umrechnen und Buchungsvorschlag erzeugen. PDFs und Belegdaten verlassen den Browser nie — gespeichert werden nur gelernte Zuordnungen.</div>
+
+  <h2>Belege hochladen</h2>
+  <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="PDF-Dateien auswählen oder hierher ziehen">
+    <strong>PDFs hierher ziehen oder klicken zum Auswählen</strong>
+    <span>Erwartet: Swissquote-Börsentransaktionen (Wertschriften &amp; Krypto, Kauf/Verkauf) oder Raiffeisen-Zeichnungen</span>
+    <input type="file" id="fileInput" accept="application/pdf" multiple>
+  </div>
+
+  <h2>Referenzdaten <span class="hint">Stammdaten &amp; FX-Kurse aus D1 securities · gelernte Regeln aus D1 codingpilot</span></h2>
+  <div class="card ref-bar">
+    <span class="status" id="refStatus"></span>
+    <button class="secondary" id="reloadRef">Neu laden</button>
+  </div>
+
+  <h2>Belege prüfen &amp; kontieren <span class="hint" id="resultCount"></span></h2>
+  <div id="results"><div class="empty-state" id="emptyState">Noch keine Belege hochgeladen.</div></div>
+
+  <div class="bulk" id="bulkFooter" style="display:none;">
+    <span class="count" id="bulkCount"></span>
+    <div class="btn-row">
+      <button class="accent" id="downloadEntries">entries.xlsx herunterladen</button>
+    </div>
+  </div>
+
+  <div class="footer" id="appVersion"></div>
+</div>
+
+<script src="vendor/pdf.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="common.js"></script>
+<script>
+let docs = [];
+let seq = 0;
+
+const GERMAN_MONTHS = {Januar:'01',Februar:'02','März':'03',April:'04',Mai:'05',Juni:'06',Juli:'07',August:'08',September:'09',Oktober:'10',November:'11',Dezember:'12'};
+function toISOGerman(d){ if(!d) return ''; const m = d.match(/(\d{1,2})\.\s*(\S+)\s*(\d{4})/); if(!m) return ''; return m[3]+'-'+(GERMAN_MONTHS[m[2]]||'01')+'-'+m[1].padStart(2,'0'); }
+function extractTitel(t, isin){
+  const HEADER_BLACKLIST = ['titel','bezeichnung','anzahl','security','exchange','börse','bezeichnung anzahl','bezeichnung währung','titel börse','security exchange','währung','rate'];
+  const lines = t.split(/\n+/).map(l=>l.trim());
+  let isinIdx = -1;
+  for(let i=0;i<lines.length;i++){ if((isin && lines[i].includes(isin)) || /ISIN/i.test(lines[i])){ isinIdx=i; break; } }
+  if(isinIdx===-1) return '';
+  function clean(s){ return (s||'').replace(/ISIN[\s\S]*$/i,'').trim().replace(/^[\d'.,]+\s+/,'').replace(/\s+[\d'.,]+$/,'').trim(); }
+  const candidates = [clean(lines[isinIdx]), clean(lines[isinIdx+1]), clean(lines[isinIdx-1]), clean(lines[isinIdx+2]), clean(lines[isinIdx-2])];
+  for(const c of candidates){ if(c.length>=3 && !HEADER_BLACKLIST.includes(c.toLowerCase()) && /[A-Za-zÀ-ÿ]{2,}/.test(c)) return c; }
+  return '';
+}
+
+/* ================= Parser je Beleg-Layout (Kauf/Verkauf) ================= */
+function parseSwissquoteBoerse(t,r){
+  const m = t.match(/Börsentransaktion:\s*(Kauf|Verkauf)/i);
+  r.typ = m ? m[1] : 'Kauf';
+  r.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t);
+  r.konto = grab(/Kunde:\s*(\d+)/i, t);
+  r.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.valutadatum = toISO(grab(/Valutadatum\s+(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.isin = grab(/ISIN[-\s]?(?:Nr\.?)?:?\s*([A-Z]{2}[A-Z0-9]{9}\d)/i, t);
+  r.titel = extractTitel(t, r.isin);
+  const qm = t.match(/Anzahl\s+Preis\s+Betrag\s+([\d'.,]+)\s+([\d'.,]+)\s+([A-Z]{3})\s+([\d'.,]+)/i);
+  if(qm){ r.anzahl=qm[1]; r.kurs=qm[2]; r.waehrung=qm[3]; r.betrag=qm[4]; }
+  r.gebuehren = grab(/Kommission Swissquote Bank AG\s+[A-Z]{3}\s+([\d'.,]+)/i, t);
+  r.total = grab(/Zu Ihren Lasten\s+[A-Z]{3}\s+([\d'.,]+)/i, t) || grab(/Zu Ihren Gunsten\s+[A-Z]{3}\s+([\d'.,]+)/i, t);
+}
+function parseSwissquoteBuyEN(t,r){
+  const m = t.match(/(Buy|Sell)\s*\n?\s*Our reference/i);
+  r.typ = m ? (m[1]==='Buy'?'Kauf':'Verkauf') : 'Kauf';
+  r.referenz = grab(/Our reference\s*:\s*(\d+)/i, t);
+  r.konto = grab(/Client:\s*(\d+)/i, t);
+  r.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.valutadatum = toISO(grab(/value date of\s+(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.isin = grab(/ISIN[-\s]?(?:Nr\.?)?:?\s*([A-Z]{2}[A-Z0-9]{9}\d)/i, t);
+  r.titel = extractTitel(t, r.isin);
+  const qm = t.match(/Quantity\s+Price\s+Amount\s+([\d'.,]+)\s+([\d'.,]+)\s+([A-Z]{3})\s+([\d'.,]+)/i);
+  if(qm){ r.anzahl=qm[1]; r.kurs=qm[2]; r.waehrung=qm[3]; r.betrag=qm[4]; }
+  r.gebuehren = grab(/Tax \(Federal stamp duty\)\s+[A-Z]{3}\s+([\d'.,]+)/i, t);
+  const tot = t.match(/To your (debit|credit)\s+[A-Z]{3}\s+([\d'.,]+)/i);
+  r.total = tot ? tot[2] : grab(/Total\s+[A-Z]{3}\s+([\d'.,]+)/i, t);
+}
+function parseRaiffeisenZeichnung(t,r){
+  r.typ = 'Kauf'; // Zeichnung = Erwerb von Anteilen, buchhalterisch ein Buy
+  r.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t);
+  r.datum = toISOGerman(grab(/St\.\s*Gallen,\s*([^\n]+\d{4})/i, t));
+  r.valutadatum = toISO(grab(/Valuta\s+(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.isin = grab(/ISIN[-\s]?(?:Nr\.?)?:?\s*([A-Z]{2}[A-Z0-9]{9}\d)/i, t);
+  const gm = t.match(/gezeichnet:\s*\n?\s*([\d'.,]+)\s+([^\n]+)/i);
+  if(gm){ r.anzahl = gm[1]; r.titel = gm[2].replace(/Valoren-Nr\.[\s\S]*$/i,'').replace(/\s*-\s*$/,'').trim(); }
+  r.waehrung = 'CHF';
+  r.betrag = grab(/Kurswert\s+CHF\s+(-?[\d.,']+)/i, t);
+  r.gebuehren = grab(/Courtage\s+CHF\s+(-?[\d.,']+)/i, t);
+  r.total = grab(/Belastung[\s\S]{0,25}?CHF\s+([\d.,']+)/i, t) || grab(/Total\s+CHF\s+(-?[\d.,']+)/i, t);
+}
+function parseSwissquoteKryptoKauf(t,r){
+  const m = t.match(/(Kauf|Verkauf)\s*\n?\s*Unsere Referenz/i);
+  r.typ = m ? m[1] : 'Kauf';
+  r.referenz = grab(/Unsere Referenz\s*:\s*(\d+)/i, t);
+  r.konto = grab(/Kunde:\s*(\d+)/i, t);
+  r.datum = toISO(grab(/Gland,\s*(\d{2}\.\d{2}\.\d{4})/i, t));
+  r.valutadatum = toISO(grab(/Valutadatum\s+(\d{2}\.\d{2}\.\d{4})/i, t));
+  const qm = t.match(/Anzahl\s+Währung\s+Rate\s+([\d.,']+)\s+([A-Z]{2,5})\s+([\d.,']+)/i);
+  if(qm){ r.anzahl=qm[1]; r.titel=qm[2]; r.kurs=qm[3]; }
+  const bm = t.match(/Bruttobetrag\s+([A-Z]{3})\s+([\d.,']+)/i);
+  if(bm){ r.waehrung=bm[1]; r.betrag=bm[2]; }
+  r.gebuehren = grab(/Kommission Swissquote Bank AG\s+[A-Z]{3}\s+([\d.,']+)/i, t);
+  r.total = grab(/Total\s+[A-Z]{3}\s+([\d.,']+)/i, t);
+  r.isin = ''; // Krypto hat keine ISIN — Matching läuft über den Ticker/Namen (r.titel)
+}
+function blankFields(){
+  return {broker:'',typ:'',datum:'',valutadatum:'',referenz:'',konto:'',titel:'',isin:'',anzahl:'',kurs:'',waehrung:'',betrag:'',gebuehren:'',total:'',hinweis:''};
+}
+function parse(rawText){
+  const t = rawText.replace(/\r/g,'');
+  const r = blankFields();
+  r.broker = /Swissquote/i.test(t) ? 'Swissquote' : (/Raiffeisen/i.test(t) ? 'Raiffeisen' : 'Unbekannt');
+  try{
+    if(r.broker==='Raiffeisen' && /Zeichnung/i.test(t)) parseRaiffeisenZeichnung(t, r);
+    else if(r.broker==='Swissquote' && /Börsentransaktion:\s*(Kauf|Verkauf)/i.test(t)) parseSwissquoteBoerse(t, r);
+    else if(r.broker==='Swissquote' && /Quantity\s+Price\s+Amount/i.test(t)) parseSwissquoteBuyEN(t, r);
+    else if(r.broker==='Swissquote' && /Anzahl\s+Währung\s+Rate/i.test(t)) parseSwissquoteKryptoKauf(t, r);
+    else { r.hinweis = 'Layout nicht erkannt — dieses Modul deckt Kauf/Verkauf/Zeichnung (Wertschriften & Krypto) ab, keine Dividenden/Staking'; }
+  } catch(e){ r.hinweis = 'Extraktion unvollständig — bitte Felder prüfen'; }
+  return r;
+}
+function suggestAccountOwner(text){
+  if(/Philipp/i.test(text)) return 'Philipp';
+  if(/Samantha/i.test(text)) return 'Samantha';
+  if(/Ver[oó]nica/i.test(text)) return 'Vero';
+  return '';
+}
+
+/* ================= Stammdaten-Abgleich ================= */
+function findSecurityMatch(isin, nameHint){
+  if(isin){
+    const m = Ref.master.find(r => r.ID_ISIN && r.ID_ISIN.toUpperCase()===isin.toUpperCase());
+    if(m) return m;
+  }
+  const t = (nameHint||'').toLowerCase();
+  if(t){
+    const m = Ref.master.find(r => r.SecurityName && (t.includes(r.SecurityName.toLowerCase()) || r.SecurityName.toLowerCase().includes(t)));
+    if(m) return m;
+  }
+  return null;
+}
+function findMasterById(securityId){
+  return Ref.master.find(r => String(r.SecurityID)===String(securityId)) || null;
+}
+
+/* ================= FX & Beträge ================= */
+function fxRateToCHF(currency, dateISO){
+  if(currency === 'CHF') return {rate:1, date:dateISO};
+  const secId = currency==='USD' ? Ref.priceIds.USDCHF : (currency==='EUR' ? Ref.priceIds.EURCHF : null);
+  if(!secId) return null;
+  const row = lookupPrice(secId, dateISO);
+  return row ? {rate: row.price, date: row.date} : null;
+}
+function computeAmounts(trxCurrency, securityCurrency, rawGrossMag, rawExpenseMag, dateISO){
+  const trxFx = fxRateToCHF(trxCurrency, dateISO);
+  const secFx = fxRateToCHF(securityCurrency, dateISO);
+  if(!trxFx) throw new Error('Kein FX-Kurs für '+trxCurrency+' am '+dateISO);
+  if(!secFx) throw new Error('Kein FX-Kurs für '+securityCurrency+' am '+dateISO);
+
+  function convert(amountTrxCcy){
+    let amtChf, amtLc;
+    if(trxCurrency === securityCurrency){
+      amtLc = amountTrxCcy;
+      amtChf = securityCurrency==='CHF' ? amtLc : amtLc * secFx.rate;
+    } else {
+      amtChf = trxCurrency==='CHF' ? amountTrxCcy : amountTrxCcy * trxFx.rate;
+      amtLc = securityCurrency==='CHF' ? amtChf : amtChf / secFx.rate;
+    }
+    return {amtChf: roundTo2(amtChf), amtLc: roundTo2(amtLc)};
+  }
+  const gross = convert(rawGrossMag);
+  const expense = convert(rawExpenseMag);
+  return {
+    AmtCHF: gross.amtChf, AmtLC: gross.amtLc,
+    ExpenseCHF: expense.amtChf, ExpenseLC: expense.amtLc,
+    CurrencyPrice: secFx.rate, CurrencyPriceDate: secFx.date
+  };
+}
+
+/* ================= FIBU-Konten =================
+   Kosten-/Transferkonto sind formelbasiert. Das Bankkonto hat einen nicht ableitbaren
+   Zusatz (z.B. "(#315)") und kommt aus gelernten Regeln (FIBUKonto), mit den sechs
+   bekannten Swissquote-Konten als Startbelegung — per "Merken" überschreibbar. */
+const FIBU_BANK_DEFAULTS = {
+  'Swissquote|Philipp|CHF': 'SQ WS CHF PG (#315)',
+  'Swissquote|Philipp|EUR': 'SQ WS EUR PG (#315)',
+  'Swissquote|Philipp|USD': 'SQ WS USD PG (#315)',
+  'Swissquote|Vero|CHF': 'SQ WS CHF VP',
+  'Swissquote|Vero|EUR': 'SQ WS EUR VP',
+  'Swissquote|Vero|USD': 'SQ WS USD VP'
+};
+function resolveBankAccount(broker, owner, currency){
+  const rule = findRule('FIBUKonto', {broker, owner, currency});
+  if(rule) return rule.Value;
+  return FIBU_BANK_DEFAULTS[broker+'|'+owner+'|'+currency] || '';
+}
+function resolveFibuAccounts(doc){
+  const suffix = personSuffix(doc.custodyId);
+  const depotRule = findRule('FIBU_Depot', {custodyId: doc.custodyId});
+  return {
+    costsAccount: `Investment transaction costs ${suffix}`,
+    depotAccount: depotRule ? depotRule.Value : '',
+    transferAccount: `Admin & Transfer ${suffix}`,
+    bankAccount: resolveBankAccount(doc.fields.broker, doc.owner, doc.securityCurrency)
+  };
+}
+
+/* ================= Rendering ================= */
+const RAW_FIELD_DEFS = [['datum','Datum'],['broker','Broker'],['typ','Beleg-Typ'],['titel','Titel'],['isin','ISIN'],
+  ['anzahl','Anzahl'],['kurs','Kurs'],['waehrung','TrxCurrency'],['betrag','Betrag (Brutto)'],['gebuehren','Gebühren'],
+  ['total','Total (inkl. Gebühren)'],['referenz','Referenz'],['konto','Konto/Kunde'],['valutadatum','Valutadatum']];
+
+function updateBulkCount(){
+  document.getElementById('bulkCount').textContent = docs.filter(d=>d.calc).length + ' berechnet · ' + docs.length + ' gesamt';
+}
+function renderAll(){
+  const container = document.getElementById('results');
+  const empty = document.getElementById('emptyState');
+  container.innerHTML = '';
+  if(docs.length === 0){
+    container.appendChild(empty);
+    document.getElementById('resultCount').textContent = '';
+    document.getElementById('bulkFooter').style.display = 'none';
+    return;
+  }
+  document.getElementById('resultCount').textContent = docs.length + ' Beleg(e)';
+  document.getElementById('bulkFooter').style.display = 'flex';
+  updateBulkCount();
+  docs.forEach(doc => container.appendChild(renderStub(doc)));
+}
+function renderStub(doc){
+  const f = doc.fields;
+  const kind = f.typ==='Kauf' ? 'buy' : (f.typ==='Verkauf' ? 'sell' : '');
+  const fibu = doc.fibu || {};
+  const stub = document.createElement('div');
+  stub.className = 'stub ' + kind;
+  doc.el = stub;
+  stub.innerHTML = `
+    <div class="stub-head">
+      <div class="stub-head-left">
+        <span class="badge ${kind}">${f.typ==='Kauf'?'Buy':(f.typ==='Verkauf'?'Sell':'Unbekannt')}</span>
+        <span class="filename">${esc(doc.name)}</span>
+      </div>
+      ${f.hinweis ? '<span class="warn-text">⚠ ' + esc(f.hinweis) + '</span>' : ''}
+    </div>
+    <div class="stub-body">
+      <details class="raw"><summary>Rohdaten aus PDF anzeigen/bearbeiten</summary>
+        <div class="grid" data-role="rawgrid" style="margin-top:12px;"></div>
+      </details>
+
+      <p class="subhead"><span class="step">1</span> Account Owner &amp; Custody</p>
+      <div class="grid">
+        <div class="cell"><label>Account Owner</label>
+          <select data-role="owner">
+            <option value="">— wählen —</option>
+            ${['Philipp','Samantha','Vero'].map(o => `<option value="${o}" ${doc.owner===o?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        <div class="cell learn"><label>CustodyID</label>
+          <input type="text" data-role="custodyId" value="${esc(doc.custodyId)}">
+          <div class="learnrow"><button class="ghost" data-role="learnCustody">Merken</button><span class="status" data-role="custodyStatus"></span></div>
+        </div>
+      </div>
+
+      <p class="subhead"><span class="step">2</span> Wertschrift abgleichen</p>
+      <div data-role="matchnote">${doc.matched
+        ? '<div class="match-note hit">✓ In Stammdaten gefunden (SecurityID '+esc(doc.securityId)+')</div>'
+        : '<div class="match-note miss">⚠ Keine Wertschrift in den Stammdaten gefunden — bitte SecurityID/Name/Währung manuell prüfen und eintragen.</div>'}</div>
+      <div class="grid">
+        <div class="cell"><label>SecurityID</label><input type="text" data-role="securityId" value="${esc(doc.securityId)}"></div>
+        <div class="cell"><label>SecurityName</label><input type="text" data-role="securityName" value="${esc(doc.securityName)}"></div>
+        <div class="cell"><label>Security-Währung</label><input type="text" data-role="securityCurrency" value="${esc(doc.securityCurrency)}"></div>
+        <div class="cell learn"><label>ProjectID</label>
+          <input type="text" data-role="projectId" value="${esc(doc.projectId)}">
+          <div class="learnrow"><button class="ghost" data-role="learnProject">Merken</button><span class="status" data-role="projectStatus"></span></div>
+        </div>
+        <div class="cell learn"><label>EntryNo</label>
+          <input type="text" data-role="entryNo" value="${esc(doc.entryNo)}">
+          <div class="learnrow"><button class="ghost" data-role="learnEntry">Merken</button><span class="status" data-role="entryStatus"></span></div>
+        </div>
+      </div>
+
+      <p class="subhead"><span class="step">3</span> FIBU-Konten</p>
+      <div class="grid" data-role="fibugrid" style="${doc.fibu ? '' : 'display:none;'}">
+        <div class="cell"><label>Kostenkonto</label><input type="text" data-role="fibuCosts" value="${esc(fibu.costsAccount)}"></div>
+        <div class="cell learn"><label>Depotkonto</label>
+          <input type="text" data-role="fibuDepot" value="${esc(fibu.depotAccount)}">
+          <div class="learnrow"><button class="ghost" data-role="learnDepot">Merken</button><span class="status" data-role="depotStatus"></span></div>
+        </div>
+        <div class="cell"><label>Transferkonto</label><input type="text" data-role="fibuTransfer" value="${esc(fibu.transferAccount)}"></div>
+        <div class="cell learn"><label>Bankkonto</label>
+          <input type="text" data-role="fibuBank" value="${esc(fibu.bankAccount)}">
+          <div class="learnrow"><button class="ghost" data-role="learnBank">Merken</button><span class="status" data-role="bankStatus"></span></div>
+        </div>
+      </div>
+      <p class="panel-note" data-role="fibuhint" style="${doc.fibu ? 'display:none;' : ''}">Erscheint nach "Berechnen".</p>
+
+      <div class="calc-panel" data-role="calcpanel" style="display:none;"></div>
+    </div>
+    <div class="stub-foot">
+      <span class="status" data-role="status">${esc(doc.status)}</span>
+      <div class="foot-actions">
+        <button class="secondary" data-role="download">PDF umbenennen &amp; herunterladen</button>
+        <button class="accent" data-role="calc">Berechnen</button>
+        <button class="danger" data-role="delete">Löschen</button>
+      </div>
+    </div>
+  `;
+  const q = (role) => stub.querySelector(`[data-role="${role}"]`);
+  const bind = (role, apply) => q(role).addEventListener('input', e => apply(e.target.value));
+
+  const rawGrid = q('rawgrid');
+  RAW_FIELD_DEFS.forEach(([key,label]) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.innerHTML = `<label>${label}</label><input type="text" value="${esc(f[key])}">`;
+    cell.querySelector('input').addEventListener('input', (e)=>{ f[key] = e.target.value; });
+    rawGrid.appendChild(cell);
+  });
+
+  function refreshFibuIfCalculated(){
+    if(doc.calc){ doc.fibu = resolveFibuAccounts(doc); refreshFibuFields(doc); }
+  }
+
+  // 1) Owner & Custody
+  q('owner').addEventListener('change', e=>{
+    doc.owner = e.target.value;
+    const m = findRule('CustodyID', {broker: f.broker, owner: doc.owner});
+    if(m){ doc.custodyId = m.Value; q('custodyId').value = m.Value; }
+    refreshFibuIfCalculated();
+  });
+  bind('custodyId', v => { doc.custodyId = v; refreshFibuIfCalculated(); });
+  q('learnCustody').addEventListener('click', ()=> learn(q('custodyStatus'), doc.owner && doc.custodyId, 'Owner+CustodyID nötig',
+    'CustodyID', {broker: f.broker, owner: doc.owner}, doc.custodyId));
+
+  // 2) Wertschrift
+  bind('securityId', v => doc.securityId = v);
+  bind('securityName', v => doc.securityName = v);
+  bind('securityCurrency', v => { doc.securityCurrency = v; refreshFibuIfCalculated(); });
+  bind('projectId', v => doc.projectId = v);
+  bind('entryNo', v => doc.entryNo = v);
+  q('learnProject').addEventListener('click', ()=> learn(q('projectStatus'), doc.securityId && doc.projectId, 'SecurityID+ProjectID nötig',
+    'ProjectID', {securityId: doc.securityId}, doc.projectId));
+  q('learnEntry').addEventListener('click', ()=> learn(q('entryStatus'), doc.securityId && doc.entryNo, 'SecurityID+EntryNo nötig',
+    'EntryNo', {securityId: doc.securityId}, doc.entryNo));
+
+  // 3) FIBU-Konten
+  bind('fibuCosts', v => { if(doc.fibu) doc.fibu.costsAccount = v; });
+  bind('fibuDepot', v => { if(doc.fibu) doc.fibu.depotAccount = v; });
+  bind('fibuTransfer', v => { if(doc.fibu) doc.fibu.transferAccount = v; });
+  bind('fibuBank', v => { if(doc.fibu) doc.fibu.bankAccount = v; });
+  q('learnBank').addEventListener('click', ()=> learn(q('bankStatus'), doc.fibu && doc.fibu.bankAccount, 'Erst berechnen + Bankkonto ausfüllen',
+    'FIBUKonto', {broker: f.broker, owner: doc.owner, currency: doc.securityCurrency}, doc.fibu && doc.fibu.bankAccount));
+  q('learnDepot').addEventListener('click', ()=> learn(q('depotStatus'), doc.custodyId && doc.fibu && doc.fibu.depotAccount, 'Erst berechnen + Depotkonto ausfüllen',
+    'FIBU_Depot', {custodyId: doc.custodyId}, doc.fibu && doc.fibu.depotAccount));
+
+  q('download').addEventListener('click', ()=>{
+    const filename = buildFilenameWertschriften(doc);
+    if(!filename) return setStatus(q('status'), 'err', '✗ Bitte zuerst "Berechnen" klicken');
+    downloadRenamedPdfBuffer(doc.arrayBuffer, filename);
+  });
+  q('calc').addEventListener('click', ()=> calcOne(doc));
+  q('delete').addEventListener('click', ()=>{ docs = docs.filter(d => d.id !== doc.id); renderAll(); });
+  renderCalcPanel(doc);
+  return stub;
+}
+function renderCalcPanel(doc){
+  const panel = doc.el.querySelector('[data-role="calcpanel"]');
+  if(!doc.calc){ panel.style.display='none'; panel.innerHTML=''; return; }
+  const c = doc.calc, cry = esc(doc.securityCurrency);
+  panel.style.display='';
+  panel.innerHTML = `
+    <div class="calc-row"><span class="k">CurrencyPrice (${cry}/CHF) am ${esc(c.CurrencyPriceDate||doc.fields.datum)}</span><span class="v">${c.CurrencyPrice}</span></div>
+    <div class="calc-row result"><span class="k">AmtLC / AmtCHF</span><span class="v">${c.AmtLC.toFixed(2)} ${cry} / ${c.AmtCHF.toFixed(2)} CHF</span></div>
+    <div class="calc-row result"><span class="k">ExpenseLC / ExpenseCHF</span><span class="v">${c.ExpenseLC.toFixed(2)} ${cry} / ${c.ExpenseCHF.toFixed(2)} CHF</span></div>
+    <div class="calc-row"><span class="k">Kontrolle (inkl. Spesen)</span><span class="v">${c.AmtLC_expenses.toFixed(2)} ${cry} / ${c.AmtCHF_expenses.toFixed(2)} CHF</span></div>
+  `;
+}
+function refreshFibuFields(doc){
+  if(!doc.fibu) return;
+  const q = (role) => doc.el.querySelector(`[data-role="${role}"]`);
+  q('fibugrid').style.display = '';
+  q('fibuhint').style.display = 'none';
+  q('fibuCosts').value = doc.fibu.costsAccount;
+  q('fibuDepot').value = doc.fibu.depotAccount;
+  q('fibuTransfer').value = doc.fibu.transferAccount;
+  q('fibuBank').value = doc.fibu.bankAccount;
+}
+
+/* ================= PDF lokal umbenennen ================= */
+function brokerAbbr(broker){ return broker==='Swissquote' ? 'SQ' : (broker==='Raiffeisen' ? 'RB' : (broker||'')); }
+function buildFilenameWertschriften(doc){
+  const f = doc.fields;
+  if(!doc.calc) return null;
+  const dateCompact = (f.datum||'').replace(/-/g,'') || 'YYYYMMDD';
+  const master = findMasterById(doc.securityId);
+  const valor = (master && master.ID_Valor) || doc.securityId || 'X';
+  const buyOrSell = f.typ==='Verkauf' ? 'Sell' : 'Buy';
+  const amt = Math.abs(doc.calc.AmtLC).toFixed(2);
+  return `${dateCompact}_VN_${valor}_${buyOrSell}_(${doc.securityCurrency||''}_${amt})_${brokerAbbr(f.broker)}_${f.referenz||''}.pdf`;
+}
+
+/* ================= Datei-Eingang (nur lokal) ================= */
+async function handleFiles(fileList){
+  if(Ref.master.length===0) await loadReference(document.getElementById('refStatus'));
+  for(const file of fileList){
+    if(!isPdf(file)) continue;
+    const buf = await file.arrayBuffer();
+    let text = '', fields = blankFields();
+    try{ text = await extractPdfText(buf); fields = parse(text); } catch(e){ fields.hinweis = 'PDF konnte nicht gelesen werden'; }
+
+    const owner = suggestAccountOwner(text);
+    const custMatch = findRule('CustodyID', {broker: fields.broker, owner});
+    const secMatch = findSecurityMatch(fields.isin, fields.titel);
+    const projMatch = secMatch ? findRule('ProjectID', {securityId: secMatch.SecurityID}) : null;
+    const entryMatch = secMatch ? findRule('EntryNo', {securityId: secMatch.SecurityID}) : null;
+
+    docs.push({
+      id: ++seq, name: file.name, arrayBuffer: buf, fields,
+      owner, custodyId: custMatch ? custMatch.Value : '',
+      matched: !!secMatch,
+      securityId: secMatch ? String(secMatch.SecurityID) : '',
+      securityName: secMatch ? secMatch.SecurityName : (fields.titel||''),
+      securityCurrency: secMatch ? (secMatch.Currency||'') : (fields.waehrung||''),
+      projectId: projMatch ? projMatch.Value : '',
+      entryNo: entryMatch ? entryMatch.Value : '',
+      calc: null, fibu: null, status: ''
+    });
+  }
+  renderAll();
+}
+initDropzone(handleFiles);
+
+/* ================= Berechnung ================= */
+function calcOne(doc){
+  const statusEl = doc.el.querySelector('[data-role="status"]');
+  const f = doc.fields;
+  if(!f.typ) return setStatus(statusEl, 'err', '✗ Beleg-Typ (Kauf/Verkauf) unbekannt');
+  if(!doc.securityCurrency) return setStatus(statusEl, 'err', '✗ Security-Währung fehlt');
+  if(!f.datum) return setStatus(statusEl, 'err', '✗ Transaktionsdatum fehlt');
+  const grossMag = Math.abs(parseSwissNumber(f.betrag) || 0);
+  const totalMag = Math.abs(parseSwissNumber(f.total) || 0);
+  const expenseMag = roundTo2(totalMag - grossMag);
+  if(expenseMag < -0.01){
+    return setStatus(statusEl, 'err', '✗ Fehler: Total ('+totalMag+') kleiner als Betrag ('+grossMag+') — ExpenseLC wäre negativ');
+  }
+  try{
+    const result = computeAmounts(f.waehrung, doc.securityCurrency, grossMag, Math.max(expenseMag,0), f.datum);
+    const sign = f.typ === 'Verkauf' ? -1 : 1;
+    doc.calc = {
+      AmtLC: sign*result.AmtLC, AmtCHF: sign*result.AmtCHF,
+      ExpenseLC: result.ExpenseLC, ExpenseCHF: result.ExpenseCHF,
+      AmtLC_expenses: sign*result.AmtLC + result.ExpenseLC,
+      AmtCHF_expenses: sign*result.AmtCHF + result.ExpenseCHF,
+      CurrencyPrice: result.CurrencyPrice, CurrencyPriceDate: result.CurrencyPriceDate
+    };
+    doc.fibu = resolveFibuAccounts(doc);
+    setStatus(statusEl, 'ok', '✓ Berechnet · '+new Date().toLocaleTimeString('de-CH'));
+    renderCalcPanel(doc);
+    refreshFibuFields(doc);
+    updateBulkCount();
+  } catch(e){
+    setStatus(statusEl, 'err', '✗ '+e.message);
+  }
+}
+
+/* ================= Export: entries.xlsx (Tabs FIBU + Securities) ================= */
+const FIBU_COLUMNS = ['MainID','PartyNo','Shop','Location','ProjectID','AmtCHF','Cry','AmtCry','Valuta','DateClearance','Comment','TrxArt'];
+function fmt2(n){ return roundTo2(n).toFixed(2); }
+function buildFibuRows(doc){
+  if(!doc.calc || !doc.fibu || !doc.projectId) return [];
+  const f = doc.fields;
+  const c = doc.calc;
+  const cry = doc.securityCurrency;
+  const trxArt = f.typ==='Verkauf' ? 'WS_Sell' : 'WS_Buy';
+  const valutaTrx = toDDMMYYYY(f.datum);
+  const valutaValuta = toDDMMYYYY(f.valutadatum) || valutaTrx;
+  const sameDate = !f.valutadatum || f.datum === f.valutadatum;
+  const bankCry = cry==='CHF' ? '' : cry;
+  const base = {PartyNo: doc.securityName, Shop:'', Location:'', ProjectID: doc.projectId, Comment:'', TrxArt: trxArt};
+  const rows = [
+    Object.assign({}, base, {MainID: doc.fibu.costsAccount, AmtCHF: fmt2(c.ExpenseCHF), Cry: cry, AmtCry: fmt2(c.ExpenseLC), Valuta: valutaTrx, DateClearance:''}),
+    Object.assign({}, base, {MainID: doc.fibu.depotAccount, AmtCHF: fmt2(c.AmtCHF), Cry: cry, AmtCry: fmt2(c.AmtLC), Valuta: valutaTrx, DateClearance:''})
+  ];
+  if(!sameDate){
+    rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(-c.AmtLC_expenses), Valuta: valutaTrx, DateClearance: valutaValuta}));
+    rows.push(Object.assign({}, base, {MainID: doc.fibu.transferAccount, AmtCHF: fmt2(c.AmtCHF_expenses), Cry: cry, AmtCry: fmt2(c.AmtLC_expenses), Valuta: valutaValuta, DateClearance: valutaValuta}));
+  }
+  rows.push(Object.assign({}, base, {MainID: doc.fibu.bankAccount, AmtCHF: fmt2(-c.AmtCHF_expenses), Cry: bankCry, AmtCry: bankCry ? fmt2(-c.AmtLC_expenses) : '', Valuta: sameDate ? valutaTrx : valutaValuta, DateClearance:''}));
+  return rows;
+}
+const WS_COLUMNS = ['MainID','CustodyID','ProjectID','TrxTypeID','Date','Valuta','Quantity','Cry','AmtCHF','AmtLC',
+  'ExpenseCHF','ExpenseLC','Price_CHF','Price_Cry','Price_LC','Comments','EntryNo','Checkp1','Checkp2','Checkp3','Source'];
+function buildWsRow(doc){
+  if(!doc.calc) return null;
+  const f = doc.fields;
+  const valuta = toDDMMYYYY(f.datum);
+  const qty = parseSwissNumber(f.anzahl) || 0;
+  return {
+    MainID: doc.securityName, CustodyID: doc.custodyId, ProjectID: doc.projectId,
+    TrxTypeID: f.typ==='Verkauf' ? 'Sell' : 'Buy',
+    Date: valuta, Valuta: toDDMMYYYY(f.valutadatum) || valuta,
+    Quantity: f.typ==='Verkauf' ? -Math.abs(qty) : Math.abs(qty), Cry: doc.securityCurrency,
+    AmtCHF: doc.calc.AmtCHF.toFixed(2), AmtLC: doc.calc.AmtLC.toFixed(2),
+    ExpenseCHF: doc.calc.ExpenseCHF.toFixed(2), ExpenseLC: doc.calc.ExpenseLC.toFixed(2),
+    Price_CHF:'', Price_Cry:'', Price_LC:'',
+    Comments: (brokerAbbr(f.broker) + ' ' + (f.referenz||'')).trim(),
+    EntryNo: doc.entryNo,
+    Checkp1:'PENDING', Checkp2:'', Checkp3:'',
+    Source: 'CodingPilot_Wertschriften ' + APP_VERSION
+  };
+}
+document.getElementById('downloadEntries').addEventListener('click', ()=>{
+  const wsRows = docs.map(buildWsRow).filter(Boolean);
+  if(wsRows.length===0){ alert('Keine berechneten Transaktionen vorhanden.'); return; }
+  const fibuRows = docs.flatMap(buildFibuRows);
+  const noProject = docs.filter(d => d.calc && !d.projectId).length;
+  if(noProject>0 && !confirm(noProject+' berechnete(r) Beleg(e) ohne ProjectID — diese fehlen im Tab FIBU. Trotzdem exportieren?')) return;
+  const missing = fibuRows.filter(r => !r.MainID).length;
+  if(missing>0 && !confirm(missing+' FIBU-Zeile(n) haben ein leeres Konto (z.B. Bankkonto nicht gelernt). Trotzdem exportieren?')) return;
+  exportEntries('entries_Wertschriften_' + todayISO() + '.xlsx', FIBU_COLUMNS, fibuRows, WS_COLUMNS, wsRows);
+});
+
+loadReference(document.getElementById('refStatus'));
+</script>
+</body>
+</html>
